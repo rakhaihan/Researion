@@ -35,7 +35,12 @@ class Settings(BaseSettings):
 
     search_provider: Literal["tavily", "serpapi", "mock"] = "mock"
     tavily_api_key: str = ""
+    tavily_max_results: int = Field(default=5, description="Max results per Tavily query")
     serpapi_api_key: str = ""
+    allow_search_fallback: bool = Field(
+        default=True,
+        description="Fall back to mock search when live provider fails",
+    )
 
     cors_origins: list[str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"]

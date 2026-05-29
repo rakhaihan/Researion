@@ -135,6 +135,7 @@ class ResearchWorkflow:
         analysis = await self.analyst.run(
             summaries=state["summaries"],
             topic=state["topic"],
+            sources=state["evaluated_sources"],
         )
         return {"analysis": analysis, "status": "critiquing"}
 
@@ -144,6 +145,8 @@ class ResearchWorkflow:
         critique = await self.critique_agent.run(
             analysis=state["analysis"],
             topic=state["topic"],
+            sources=state["evaluated_sources"],
+            summaries=state["summaries"],
         )
         return {"critique": critique, "status": "writing"}
 

@@ -50,7 +50,7 @@ async def get_research(
     service: ResearchService = Depends(get_research_service),
 ) -> ResearchDetailResponse:
     project = await service.get_research(db, research_id)
-    return ResearchDetailResponse.model_validate(project)
+    return service.to_detail_response(project)
 
 
 @router.post("/{research_id}/run", response_model=ResearchRunResponse)

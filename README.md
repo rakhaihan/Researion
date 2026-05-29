@@ -10,8 +10,10 @@ Multi-Agent Research Assistant — an AI-powered platform that automates researc
 - Research types: Market, Stock/Crypto, Academic, Competitor Analysis, Technology Trend
 - PostgreSQL persistence for topics, questions, sources, summaries, and final reports
 - REST API with OpenAPI docs at `/docs`
-- Markdown and PDF export
-- Modern React + Tailwind dashboard
+- **Tavily live search** with mock fallback and URL deduplication
+- **Citation-aware reports** with inline `[S1][S2]` references and Sources appendix
+- Markdown and PDF export (preserves citations)
+- Modern React + Tailwind dashboard with source credibility badges
 - Docker Compose deployment
 
 ## Architecture
@@ -162,6 +164,63 @@ Response:
 }
 ```
 
+## Tavily Live Search (Phase 2)
+
+### Configuration
+
+```env
+SEARCH_PROVIDER=tavily
+TAVILY_API_KEY=tvly-your-api-key
+TAVILY_MAX_RESULTS=5
+ALLOW_SEARCH_FALLBACK=true
+```
+
+| Variable | Description |
+|----------|-------------|
+| `SEARCH_PROVIDER` | `mock` (default), `tavily`, or `serpapi` |
+| `TAVILY_API_KEY` | API key from [tavily.com](https://tavily.com) |
+| `TAVILY_MAX_RESULTS` | Max results per research question query |
+| `ALLOW_SEARCH_FALLBACK` | If `true`, use mock search when Tavily fails |
+
+### Citation format example
+
+Report body:
+
+```text
+NVIDIA remains a leader in AI accelerators due to CUDA ecosystem strength [S1][S3].
+```
+
+Sources appendix:
+
+```text
+## Sources
+
+[S1] NVIDIA Data Center Revenue Surges — https://example.com/nvidia-earnings
+[S2] Analyst Downgrade on Valuation — https://example.com/downgrade
+[S3] Industry Outlook 2026 — https://example.com/outlook
+```
+
+### Troubleshooting Tavily
+
+| Issue | Fix |
+|-------|-----|
+| `Invalid API key (401)` | Check `TAVILY_API_KEY` in `backend/.env` |
+| Workflow fails immediately | Set `ALLOW_SEARCH_FALLBACK=true` or switch to `SEARCH_PROVIDER=mock` |
+| No live results | Verify worker container has same `.env` as backend |
+| Duplicate sources | Normal — dedup runs on normalized URL; near-duplicates may differ |
+
+### Test with mock (no API key)
+
+```env
+SEARCH_PROVIDER=mock
+```
+
+### Test with Tavily
+
+1. Set `SEARCH_PROVIDER=tavily` and valid `TAVILY_API_KEY`
+2. Restart `backend` and `worker`: `docker-compose up --build backend worker`
+3. Run a research workflow and verify sources have real URLs and `citation_key` fields
+
 ## Environment Variables
 
 See `backend/.env.example` for all options:
@@ -169,7 +228,9 @@ See `backend/.env.example` for all options:
 - `OPENAI_API_KEY` — OpenAI API key
 - `REDIS_URL` — Redis connection URL (default: `redis://localhost:6379/0`)
 - `SEARCH_PROVIDER` — `mock`, `tavily`, or `serpapi`
-- `TAVILY_API_KEY` / `SERPAPI_API_KEY` — Search provider keys
+- `TAVILY_API_KEY` / `TAVILY_MAX_RESULTS` — Tavily search settings
+- `ALLOW_SEARCH_FALLBACK` — Fall back to mock on provider failure
+- `SERPAPI_API_KEY` — SerpAPI key (optional)
 - `DATABASE_URL` — PostgreSQL async connection string
 
 ## Testing

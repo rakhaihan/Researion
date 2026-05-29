@@ -1,4 +1,5 @@
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -18,7 +19,15 @@ from app.db.models import (
     SourceResult,
     SourceSummary,
 )
-from app.schemas.research import ResearchCreate
+from app.schemas.research import (
+    FinalReportBriefResponse,
+    ResearchCreate,
+    ResearchDetailResponse,
+    ResearchQuestionResponse,
+    ResearchSummaryResponse,
+    SourceResultResponse,
+    SourceSummaryResponse,
+)
 from app.services.job_service import JobService
 from app.services.pdf_service import PDFService
 from app.utils.validators import sanitize_filename, validate_topic
@@ -86,6 +95,42 @@ class ResearchService:
                 detail="Research project not found",
             )
         return project
+
+    def to_detail_response(self, project: ResearchProject) -> ResearchDetailResponse:
+        summaries = [
+            source.summary
+            for source in project.sources
+            if source.summary is not None
+        ]
+        low_credibility_warning = any(
+            source.credibility_score is not None and source.credibility_score < 5
+            for source in project.sources
+        )
+        final_report = (
+            FinalReportBriefResponse.model_validate(project.final_report)
+            if project.final_report
+            else None
+        )
+        return ResearchDetailResponse(
+            id=project.id,
+            topic=project.topic,
+            research_type=project.research_type,
+            depth=project.depth,
+            status=project.status,
+            created_at=project.created_at,
+            updated_at=project.updated_at,
+            questions=[
+                ResearchQuestionResponse.model_validate(question)
+                for question in project.questions
+            ],
+            sources=[
+                SourceResultResponse.model_validate(source) for source in project.sources
+            ],
+            summaries=[SourceSummaryResponse.model_validate(summary) for summary in summaries],
+            final_report=final_report,
+            error_message=project.error_message,
+            low_credibility_warning=low_credibility_warning,
+        )
 
     async def enqueue_research_run(
         self,
@@ -186,30 +231,43 @@ class ResearchService:
         for source_data in state.get("evaluated_sources", []):
             question_text = source_data.get("question", "")
             question = question_map.get(question_text)
+            accessed_at = self._parse_accessed_at(source_data.get("accessed_at"))
+
+            metadata = source_data.get("raw_metadata") or {}
+            if source_data.get("evaluation_notes"):
+                metadata = {**metadata, "evaluation_notes": source_data.get("evaluation_notes")}
 
             source = SourceResult(
                 research_id=project.id,
                 question_id=question.id if question else None,
+                citation_key=source_data.get("citation_key"),
                 title=source_data.get("title", "Untitled"),
                 url=source_data.get("url", ""),
                 snippet=source_data.get("snippet", ""),
                 credibility_score=float(source_data.get("credibility_score", 0)),
+                credibility_reason=source_data.get("credibility_reason"),
                 source_type=source_data.get("source_type"),
                 published_date=source_data.get("published_date"),
-                raw_metadata={"evaluation_notes": source_data.get("evaluation_notes")},
+                raw_metadata=metadata,
+                accessed_at=accessed_at,
             )
             db.add(source)
             await db.flush()
+            if source_data.get("citation_key"):
+                source_map[source_data["citation_key"]] = source
             source_map[source_data.get("url", "")] = source
 
         summaries = state.get("summaries", [])
         for summary_data in summaries:
-            source = source_map.get(summary_data.get("source_url", ""))
+            source = source_map.get(summary_data.get("citation_key")) or source_map.get(
+                summary_data.get("source_url", "")
+            )
             if source is None:
                 continue
 
             summary = SourceSummary(
                 source_id=source.id,
+                citation_key=summary_data.get("citation_key", source.citation_key),
                 summary=summary_data.get("summary", ""),
                 key_points=summary_data.get("key_points"),
                 limitations=summary_data.get("limitations"),
@@ -234,3 +292,14 @@ class ResearchService:
         )
         db.add(final_report)
         await db.flush()
+
+    @staticmethod
+    def _parse_accessed_at(value: str | datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return None

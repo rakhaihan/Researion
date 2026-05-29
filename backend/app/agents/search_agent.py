@@ -1,7 +1,10 @@
+from datetime import UTC, datetime
 from typing import Any
 
 from app.agents.base import BaseAgent
 from app.services.search_service import SearchService
+from app.utils.citations import assign_citation_keys
+from app.utils.url_utils import normalize_url
 
 
 class SearchAgent(BaseAgent):
@@ -23,6 +26,7 @@ class SearchAgent(BaseAgent):
     ) -> list[dict[str, Any]]:
         all_sources: list[dict[str, Any]] = []
         seen_urls: set[str] = set()
+        accessed_at = datetime.now(UTC).isoformat()
 
         for question_item in questions:
             question = question_item["question"]
@@ -31,9 +35,14 @@ class SearchAgent(BaseAgent):
 
             for result in results:
                 url = result.get("url", "")
-                if not url or url in seen_urls:
+                if not url:
                     continue
-                seen_urls.add(url)
+
+                normalized = normalize_url(url)
+                if normalized in seen_urls:
+                    continue
+                seen_urls.add(normalized)
+
                 all_sources.append(
                     {
                         "question": question,
@@ -43,7 +52,10 @@ class SearchAgent(BaseAgent):
                         "snippet": result.get("snippet", ""),
                         "published_date": result.get("published_date"),
                         "source_type": result.get("source_type", "web"),
+                        "raw_metadata": result.get("raw_metadata"),
+                        "accessed_at": accessed_at,
+                        "normalized_url": normalized,
                     }
                 )
 
-        return all_sources
+        return assign_citation_keys(all_sources)

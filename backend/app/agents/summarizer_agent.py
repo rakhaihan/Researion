@@ -22,18 +22,25 @@ class SummarizerAgent(BaseAgent):
         ]
 
         for source in credible_sources:
+            citation_key = source.get("citation_key", "")
             user_prompt = (
+                f"Citation key: {citation_key}\n"
                 f"Title: {source.get('title')}\n"
                 f"URL: {source.get('url')}\n"
                 f"Snippet: {source.get('snippet')}\n"
                 f"Question context: {source.get('question', 'N/A')}\n"
+                f"Credibility: {source.get('credibility_score')}/10 — "
+                f"{source.get('credibility_reason', '')}\n"
             )
 
             fallback = {
                 "summary": source.get("snippet", "No summary available."),
-                "key_points": [source.get("snippet", "")[:200]],
+                "key_points": [
+                    f"[{citation_key}] {source.get('snippet', '')[:200]}"
+                ],
                 "useful_quotes": [],
                 "limitations": "Based on snippet only; full content not retrieved.",
+                "citation_key": citation_key,
             }
 
             result = await self.llm.generate_json(
@@ -44,6 +51,7 @@ class SummarizerAgent(BaseAgent):
 
             summaries.append(
                 {
+                    "citation_key": result.get("citation_key", citation_key),
                     "source_url": source.get("url"),
                     "source_title": source.get("title"),
                     "summary": result.get("summary", ""),

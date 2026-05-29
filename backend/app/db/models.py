@@ -193,13 +193,16 @@ class SourceResult(Base):
         nullable=True,
         index=True,
     )
+    citation_key: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     url: Mapped[str] = mapped_column(String(2000), nullable=False)
     snippet: Mapped[str] = mapped_column(Text, nullable=False, default="")
     credibility_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    credibility_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     published_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
     raw_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     research: Mapped["ResearchProject"] = relationship(back_populates="sources")
     question: Mapped["ResearchQuestion | None"] = relationship(back_populates="sources")
@@ -223,6 +226,7 @@ class SourceSummary(Base):
         unique=True,
         index=True,
     )
+    citation_key: Mapped[str | None] = mapped_column(String(10), nullable=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     key_points: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     limitations: Mapped[str | None] = mapped_column(Text, nullable=True)
