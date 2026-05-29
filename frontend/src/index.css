@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+.markdown-body h1 {
+  @apply text-2xl font-bold mb-4;
+}
+
+.markdown-body h2 {
+  @apply text-xl font-semibold mt-6 mb-3;
+}
+
+.markdown-body h3 {
+  @apply text-lg font-semibold mt-4 mb-2;
+}
+
+.markdown-body p {
+  @apply mb-3 leading-relaxed;
+}
+
+.markdown-body ul {
+  @apply list-disc pl-6 mb-4 space-y-1;
+}
+
+.markdown-body a {
+  @apply text-brand-600 hover:underline;
+}
