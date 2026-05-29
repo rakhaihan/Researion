@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import Button from "../ui/Button";
 import Card from "../ui/Card";
 import { downloadExport } from "../../services/api";
@@ -96,6 +97,7 @@ export default function ReportViewer({ researchId, markdownContent, onCitationCl
       )}
       <div className="markdown-body prose prose-slate max-w-none px-4 py-6 sm:px-6">
         <ReactMarkdown
+          rehypePlugins={[rehypeSanitize]}
           components={{
             p: ({ children }) => <p>{renderWithCitations(children, onCitationClick)}</p>,
             li: ({ children }) => <li>{renderWithCitations(children, onCitationClick)}</li>,

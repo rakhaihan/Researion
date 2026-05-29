@@ -10,6 +10,7 @@ from app.api.deps import get_db, get_research_service, resolve_current_user
 from app.db.database import AsyncSessionLocal
 from app.db.models import User
 from app.schemas.job import JobStatus, ResearchProgressResponse, ResearchRunResponse
+from app.schemas.quality import ResearchQualityEvaluationResponse
 from app.schemas.research import (
     ResearchCreate,
     ResearchDetailResponse,
@@ -89,6 +90,27 @@ async def stream_research_progress(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/{research_id}/quality", response_model=ResearchQualityEvaluationResponse)
+async def get_research_quality(
+    research_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    service: ResearchService = Depends(get_research_service),
+    current_user: User = Depends(resolve_current_user),
+) -> ResearchQualityEvaluationResponse:
+    return await service.get_quality_evaluation(db, research_id, current_user.id)
+
+
+@router.post("/{research_id}/regenerate-report", response_model=ResearchDetailResponse)
+async def regenerate_report(
+    research_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    service: ResearchService = Depends(get_research_service),
+    current_user: User = Depends(resolve_current_user),
+) -> ResearchDetailResponse:
+    project = await service.regenerate_report(db, research_id, current_user.id)
+    return service.to_detail_response(project)
 
 
 @router.get("/{research_id}", response_model=ResearchDetailResponse)

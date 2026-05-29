@@ -54,6 +54,11 @@ class ResearchProgressResponse(BaseModel):
     updated_at: datetime
 
 
+class JobCleanupResponse(BaseModel):
+    deleted_count: int
+    older_than_days: int
+
+
 class JobDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

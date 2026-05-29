@@ -1,6 +1,6 @@
 from collections.abc import AsyncGenerator
 
-from fastapi import Depends, Security
+from fastapi import Depends, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,11 +24,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def resolve_current_user(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     credentials: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
     api_key: str | None = Security(api_key_header),
 ) -> User:
-    return await get_current_user(db, credentials=credentials, api_key=api_key)
+    user = await get_current_user(db, credentials=credentials, api_key=api_key)
+    request.state.user_id = user.id
+    return user
 
 
 def get_research_service() -> ResearchService:

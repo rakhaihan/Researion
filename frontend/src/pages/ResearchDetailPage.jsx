@@ -10,6 +10,7 @@ import { SkeletonList } from "../components/ui/Skeleton";
 import WorkflowStepper from "../components/workflow/WorkflowStepper";
 import ReportViewer from "../components/research/ReportViewer";
 import SourcesPanel from "../components/research/SourcesPanel";
+import QualityScoreCard from "../components/research/QualityScoreCard";
 import { useResearchProgress } from "../hooks/useResearchProgress";
 import { api } from "../services/api";
 import { getStageDescription } from "../utils/workflowSteps";
@@ -24,6 +25,7 @@ export default function ResearchDetailPage() {
   const [error, setError] = useState("");
   const [highlightCitation, setHighlightCitation] = useState(null);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   const { progress, transport, startPolling, fetchProgress, isActive } = useResearchProgress(
     id,
@@ -63,6 +65,22 @@ export default function ResearchDetailPage() {
       loadProject();
     }
   }, [progress?.status, loadProject]);
+
+  async function handleRegenerateReport() {
+    setRegenerating(true);
+    setError("");
+    try {
+      const data = await api.regenerateReport(id);
+      setProject(data);
+      if (data.final_report) {
+        setReport(data.final_report);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to regenerate report");
+    } finally {
+      setRegenerating(false);
+    }
+  }
 
   async function handleRun() {
     setSubmitting(true);
@@ -116,6 +134,9 @@ export default function ResearchDetailPage() {
             <span className="text-xs capitalize text-slate-500">Depth: {project.depth}</span>
             {project.has_report && (
               <span className="text-xs text-emerald-600">Report ready</span>
+            )}
+            {project.quality_status && (
+              <Badge status={project.quality_status}>{project.quality_status}</Badge>
             )}
           </div>
           <h2 className="text-2xl font-bold text-slate-900">{project.topic}</h2>
@@ -191,6 +212,18 @@ export default function ResearchDetailPage() {
         <Alert variant="error" title="Workflow failed">
           {progress?.error_message || project.error_message}
         </Alert>
+      )}
+
+      {(project.quality_evaluation || project.quality_score != null) && (
+        <QualityScoreCard
+          qualityEvaluation={project.quality_evaluation}
+          qualityStatus={project.quality_status}
+          qualityScore={project.quality_score}
+          warnings={project.warnings}
+          recommendations={project.recommendations}
+          onRegenerate={project.has_report ? handleRegenerateReport : null}
+          regenerating={regenerating}
+        />
       )}
 
       <Card>

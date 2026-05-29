@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 from app.agents.base import BaseAgent
+from app.schemas.agent_outputs import CritiqueOutput
 from app.utils.citations import build_citation_catalog
 from app.utils.prompts import CRITIQUE_SYSTEM_PROMPT
 
@@ -33,22 +34,24 @@ class CritiqueAgent(BaseAgent):
             "Check for uncited claims, single-source reliance, outdated sources, and bias."
         )
 
-        fallback = {
-            "weaknesses": ["Analysis relies on secondary sources only."],
-            "missing_perspectives": [
+        fallback = CritiqueOutput(
+            weaknesses=["Analysis relies on secondary sources only."],
+            missing_perspectives=[
                 "Regional or sector-specific viewpoints may be underrepresented."
             ],
-            "possible_bias": ["Confirmation bias toward mainstream narratives."],
-            "over_reliance_on_single_source": len(sources or []) < 3,
-            "uncited_claims": [],
-            "outdated_sources": [],
-            "low_credibility_sources": low_cred,
-            "missing_perspective_areas": ["Regulatory outlook"],
-            "confidence_level": "medium",
-        }
+            possible_bias=["Confirmation bias toward mainstream narratives."],
+            over_reliance_on_single_source=len(sources or []) < 3,
+            uncited_claims=[],
+            outdated_sources=[],
+            low_credibility_sources=[k for k in low_cred if k],
+            missing_perspective_areas=["Regulatory outlook"],
+            confidence_level="medium",
+        )
 
-        return await self.llm.generate_json(
+        output, _ = await self.llm.generate_structured(
             CRITIQUE_SYSTEM_PROMPT,
             user_prompt,
-            fallback=fallback,
+            CritiqueOutput,
+            fallback,
         )
+        return output.model_dump()

@@ -1,8 +1,8 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -252,6 +252,39 @@ class JobService:
             job.research_id,
             error_message,
         )
+
+    async def list_jobs_for_user(
+        self,
+        db: AsyncSession,
+        user_id: UUID,
+        limit: int = 100,
+    ) -> list[ResearchJob]:
+        result = await db.execute(
+            select(ResearchJob)
+            .join(ResearchProject, ResearchJob.research_id == ResearchProject.id)
+            .where(ResearchProject.user_id == user_id)
+            .order_by(ResearchJob.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def cleanup_old_jobs(
+        self,
+        db: AsyncSession,
+        *,
+        older_than_days: int = 30,
+        statuses: tuple[JobStatus, ...] = (JobStatus.COMPLETED, JobStatus.FAILED),
+    ) -> int:
+        cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+        result = await db.execute(
+            delete(ResearchJob).where(
+                ResearchJob.status.in_(statuses),
+                ResearchJob.updated_at < cutoff,
+            )
+        )
+        deleted = result.rowcount or 0
+        logger.info("Cleaned up %s old jobs older than %s days", deleted, older_than_days)
+        return deleted
 
     def _to_progress_response(self, job: ResearchJob) -> ResearchProgressResponse:
         step = job.current_step

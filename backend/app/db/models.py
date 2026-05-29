@@ -50,6 +50,12 @@ class User(Base):
     )
 
 
+class QualityStatus(str, enum.Enum):
+    PASSED = "passed"
+    WARNING = "warning"
+    FAILED = "failed"
+
+
 class ResearchStatus(str, enum.Enum):
     PENDING = "pending"
     QUEUED = "queued"
@@ -91,6 +97,11 @@ class ResearchProject(Base):
         default=ResearchStatus.PENDING,
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quality_status: Mapped[QualityStatus | None] = mapped_column(
+        Enum(QualityStatus, name="quality_status_enum"),
+        nullable=True,
+    )
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -102,6 +113,11 @@ class ResearchProject(Base):
     )
 
     owner: Mapped["User"] = relationship(back_populates="research_projects")
+    quality_evaluation: Mapped["ResearchQualityEvaluation | None"] = relationship(
+        back_populates="research",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     questions: Mapped[list["ResearchQuestion"]] = relationship(
         back_populates="research",
         cascade="all, delete-orphan",
@@ -292,3 +308,38 @@ class FinalReport(Base):
     analysis_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     research: Mapped["ResearchProject"] = relationship(back_populates="final_report")
+
+
+class ResearchQualityEvaluation(Base):
+    __tablename__ = "research_quality_evaluations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    research_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_projects.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    citation_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    source_diversity_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    source_credibility_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    freshness_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    completeness_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    overall_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    quality_status: Mapped[QualityStatus] = mapped_column(
+        Enum(QualityStatus, name="quality_status_enum"),
+        nullable=False,
+        default=QualityStatus.WARNING,
+    )
+    warnings: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    recommendations: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    citation_validation: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    claim_check: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    research: Mapped["ResearchProject"] = relationship(back_populates="quality_evaluation")

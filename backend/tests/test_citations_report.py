@@ -29,7 +29,7 @@ def test_fallback_report_has_sources_section():
         },
         critique={"weaknesses": []},
         sources=sources,
-    )
+    ).model_dump()
     markdown = agent._to_markdown(
         report, "NVIDIA outlook", "Stock/Crypto Research", sources
     )
@@ -46,15 +46,20 @@ async def test_source_evaluator_credibility_reason_persisted_in_output():
 
     agent = SourceEvaluatorAgent()
 
-    async def mock_generate_json(system_prompt, user_prompt, fallback=None):
-        return {
-            "credibility_score": 3.0,
-            "credibility_reason": "Promotional blog with limited evidence.",
-            "source_type": "blog",
-            "is_primary_source": False,
-        }
+    from app.schemas.agent_outputs import SourceEvaluationItem
 
-    agent.llm.generate_json = mock_generate_json
+    async def mock_generate_structured(system_prompt, user_prompt, model_type, fallback, **kwargs):
+        return (
+            SourceEvaluationItem(
+                credibility_score=3.0,
+                credibility_reason="Promotional blog with limited evidence.",
+                source_type="blog",
+                is_primary_source=False,
+            ),
+            [],
+        )
+
+    agent.llm.generate_structured = mock_generate_structured
 
     results = await agent.run(
         sources=[

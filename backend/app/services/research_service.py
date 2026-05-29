@@ -8,17 +8,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.logging import get_logger
+from app.agents.critique_agent import CritiqueAgent
+from app.agents.report_writer_agent import ReportWriterAgent
 from app.db.models import (
     FinalReport,
+    QualityStatus,
     ResearchDepth,
     ResearchJob,
     ResearchProject,
+    ResearchQualityEvaluation,
     ResearchQuestion,
     ResearchStatus,
     ResearchType,
     SourceResult,
     SourceSummary,
 )
+from app.schemas.quality import ResearchQualityEvaluationResponse
 from app.schemas.research import (
     FinalReportBriefResponse,
     ResearchCreate,
@@ -30,6 +35,7 @@ from app.schemas.research import (
 )
 from app.services.job_service import JobService
 from app.services.pdf_service import PDFService
+from app.services.quality_evaluation_service import QualityEvaluationService
 from app.utils.validators import sanitize_filename, validate_topic
 from app.workflows.research_graph import ResearchWorkflow
 
@@ -43,6 +49,9 @@ class ResearchService:
         self._workflow: ResearchWorkflow | None = None
         self.pdf_service = PDFService()
         self.job_service = JobService()
+        self.quality_service = QualityEvaluationService()
+        self.report_writer = ReportWriterAgent()
+        self.critique_agent = CritiqueAgent()
 
     @property
     def workflow(self) -> ResearchWorkflow:
@@ -95,6 +104,7 @@ class ResearchService:
                 selectinload(ResearchProject.questions),
                 selectinload(ResearchProject.sources).selectinload(SourceResult.summary),
                 selectinload(ResearchProject.final_report),
+                selectinload(ResearchProject.quality_evaluation),
             )
         )
         if user_id is not None:
@@ -124,6 +134,14 @@ class ResearchService:
             if project.final_report
             else None
         )
+        quality_eval = None
+        warnings: list[str] = []
+        recommendations: list[str] = []
+        if project.quality_evaluation:
+            quality_eval = QualityEvaluationService.to_response(project.quality_evaluation)
+            warnings = quality_eval.warnings
+            recommendations = quality_eval.recommendations
+
         return ResearchDetailResponse(
             id=project.id,
             topic=project.topic,
@@ -145,6 +163,11 @@ class ResearchService:
             low_credibility_warning=low_credibility_warning,
             source_count=len(project.sources),
             has_report=final_report is not None,
+            quality_status=project.quality_status,
+            quality_score=project.quality_score,
+            quality_evaluation=quality_eval,
+            warnings=warnings,
+            recommendations=recommendations,
         )
 
     async def enqueue_research_run(
@@ -175,8 +198,92 @@ class ResearchService:
         )
 
         await self._persist_workflow_results(db, project, state)
+        await self._run_quality_evaluation(db, project.id)
         await db.refresh(project)
         return project
+
+    async def regenerate_report(
+        self,
+        db: AsyncSession,
+        research_id: UUID,
+        user_id: UUID,
+    ) -> ResearchProject:
+        project = await self.get_research(db, research_id, user_id=user_id)
+        if not project.sources:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No sources available. Run full research workflow first.",
+            )
+
+        sources = self._sources_to_dict(project.sources)
+        summaries = self._summaries_to_dict(project.sources)
+        questions = [{"question": q.question, "priority": q.priority} for q in project.questions]
+
+        analysis = (project.final_report.analysis_data if project.final_report else None) or {}
+        critique = await self.critique_agent.run(
+            analysis=analysis,
+            topic=project.topic,
+            sources=sources,
+            summaries=summaries,
+        )
+
+        report_data = await self.report_writer.run(
+            topic=project.topic,
+            research_type=project.research_type.value,
+            questions=questions,
+            summaries=summaries,
+            analysis=analysis,
+            critique=critique,
+            sources=sources,
+        )
+
+        if project.final_report:
+            project.final_report.executive_summary = report_data.get("executive_summary", "")
+            project.final_report.detailed_analysis = report_data.get("detailed_analysis", "")
+            project.final_report.key_findings = report_data.get("key_findings")
+            project.final_report.risks = report_data.get("risks_and_limitations")
+            project.final_report.conclusion = report_data.get("conclusion", "")
+            project.final_report.markdown_content = report_data.get("markdown_content", "")
+            project.final_report.critique_data = critique
+            analysis_payload = dict(analysis)
+            analysis_payload["report_sources"] = report_data.get("sources", [])
+            project.final_report.analysis_data = analysis_payload
+        else:
+            final_report = FinalReport(
+                research_id=project.id,
+                executive_summary=report_data.get("executive_summary", ""),
+                detailed_analysis=report_data.get("detailed_analysis", ""),
+                key_findings=report_data.get("key_findings"),
+                risks=report_data.get("risks_and_limitations"),
+                conclusion=report_data.get("conclusion", ""),
+                markdown_content=report_data.get("markdown_content", ""),
+                critique_data=critique,
+                analysis_data={
+                    **analysis,
+                    "report_sources": report_data.get("sources", []),
+                },
+            )
+            db.add(final_report)
+
+        project.status = ResearchStatus.COMPLETED
+        await db.flush()
+        await self._run_quality_evaluation(db, project.id)
+        await db.refresh(project)
+        return project
+
+    async def get_quality_evaluation(
+        self,
+        db: AsyncSession,
+        research_id: UUID,
+        user_id: UUID,
+    ) -> ResearchQualityEvaluationResponse:
+        project = await self.get_research(db, research_id, user_id=user_id)
+        if project.quality_evaluation is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quality evaluation not found. Run or regenerate the report first.",
+            )
+        return QualityEvaluationService.to_response(project.quality_evaluation)
 
     async def get_report(
         self,
@@ -225,6 +332,11 @@ class ResearchService:
         research_id: UUID,
     ) -> None:
         await db.execute(delete(FinalReport).where(FinalReport.research_id == research_id))
+        await db.execute(
+            delete(ResearchQualityEvaluation).where(
+                ResearchQualityEvaluation.research_id == research_id
+            )
+        )
         await db.execute(delete(ResearchQuestion).where(ResearchQuestion.research_id == research_id))
         await db.flush()
 
@@ -299,6 +411,9 @@ class ResearchService:
         analysis = state.get("analysis", {})
         critique = state.get("critique", {})
 
+        analysis_payload = dict(analysis)
+        analysis_payload["report_sources"] = report_data.get("sources", [])
+
         final_report = FinalReport(
             research_id=project.id,
             executive_summary=report_data.get("executive_summary", ""),
@@ -308,10 +423,55 @@ class ResearchService:
             conclusion=report_data.get("conclusion", ""),
             markdown_content=report_data.get("markdown_content", ""),
             critique_data=critique,
-            analysis_data=analysis,
+            analysis_data=analysis_payload,
         )
         db.add(final_report)
+        project.status = ResearchStatus.COMPLETED
         await db.flush()
+
+    async def _run_quality_evaluation(self, db: AsyncSession, research_id: UUID) -> None:
+        project = await self.get_research(db, research_id, user_id=None)
+        if project.final_report is None:
+            return
+
+        scores = self.quality_service.evaluate(project.final_report, list(project.sources))
+        await self.quality_service.save_evaluation(db, research_id, scores)
+        await self.quality_service.apply_to_project(db, project, scores)
+
+    @staticmethod
+    def _sources_to_dict(sources: list[SourceResult]) -> list[dict]:
+        return [
+            {
+                "citation_key": s.citation_key,
+                "title": s.title,
+                "url": s.url,
+                "snippet": s.snippet,
+                "credibility_score": s.credibility_score,
+                "credibility_reason": s.credibility_reason,
+                "source_type": s.source_type,
+                "published_date": s.published_date,
+                "question": "",
+            }
+            for s in sources
+        ]
+
+    @staticmethod
+    def _summaries_to_dict(sources: list[SourceResult]) -> list[dict]:
+        summaries: list[dict] = []
+        for source in sources:
+            if source.summary is None:
+                continue
+            summaries.append(
+                {
+                    "citation_key": source.summary.citation_key or source.citation_key,
+                    "source_url": source.url,
+                    "source_title": source.title,
+                    "summary": source.summary.summary,
+                    "key_points": source.summary.key_points,
+                    "limitations": source.summary.limitations,
+                }
+            )
+        return summaries
 
     @staticmethod
     def _parse_accessed_at(value: str | datetime | None) -> datetime | None:

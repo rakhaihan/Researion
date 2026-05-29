@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.schemas.quality import QualityStatus, ResearchQualityEvaluationResponse
 from app.utils.url_utils import extract_domain
 
 
@@ -124,3 +125,8 @@ class ResearchDetailResponse(ResearchSummaryResponse):
     low_credibility_warning: bool = False
     source_count: int = 0
     has_report: bool = False
+    quality_status: QualityStatus | None = None
+    quality_score: float | None = None
+    quality_evaluation: ResearchQualityEvaluationResponse | None = None
+    warnings: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)

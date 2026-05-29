@@ -316,6 +316,88 @@ See `backend/.env.example` for all options:
 - `SERPAPI_API_KEY` — SerpAPI key (optional)
 - `DATABASE_URL` — PostgreSQL async connection string
 
+## Phase 6 — Quality Evaluation & Anti-Hallucination
+
+### Structured agent outputs
+
+All LangGraph agents return **Pydantic-validated JSON** (`app/schemas/agent_outputs.py`):
+
+- PlannerOutput, SearchAgentOutput, SourceEvaluationOutput, SourceSummaryOutput
+- AnalystOutput, CritiqueOutput, ReportWriterOutput
+
+The LLM service parses JSON with up to **2 repair retries**, then falls back to safe defaults without crashing the workflow.
+
+### Citation validation
+
+`CitationValidationService` checks:
+
+- Inline `[S1]` keys exist in collected sources
+- No fictitious citations
+- Key finding citation coverage (target ≥70%)
+- Single-source dependency warnings
+
+### Quality score (0–100)
+
+| Sub-score | Meaning |
+|-----------|---------|
+| citation_score | Validity & coverage of citations |
+| source_diversity_score | Domain variety |
+| source_credibility_score | Average source credibility |
+| freshness_score | Dated / accessed sources |
+| completeness_score | Required report sections present |
+
+**Quality gate:**
+
+| Overall | Status |
+|---------|--------|
+| ≥80 | `passed` |
+| 60–79 | `warning` |
+| <60 | `failed` |
+
+Reports are **always saved**; warnings appear in the UI.
+
+### API
+
+| Method | Endpoint |
+|--------|----------|
+| GET | `/api/research/{id}/quality` |
+| POST | `/api/research/{id}/regenerate-report` |
+
+Regenerate re-runs **Report Writer + critique + quality only** (no new search).
+
+### Example warnings
+
+- `Fictitious or unknown citations detected: S99`
+- `Only 50% of key findings include citations`
+- `High-risk claim without citation: Revenue increased 25%...`
+- `Conclusion contains no inline citations`
+
+### Tests
+
+```bash
+cd backend && pytest tests/test_phase6_quality.py tests/test_regenerate_report.py -q
+cd frontend && npm test
+```
+
+## Phase 5 — Production & CI/CD
+
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for full production deployment.
+
+Quick reference:
+
+```bash
+cp backend/.env.production.example backend/.env.production
+# edit secrets, then:
+export POSTGRES_PASSWORD=your-db-password
+export VITE_API_URL=http://localhost:8000/api
+docker compose -f docker-compose.prod.yml up --build
+```
+
+- Health: `/api/health`, `/api/health/live`, `/api/health/ready`
+- Gunicorn backend, Nginx frontend, JSON logs in production
+- Auth rate limiting, password policy (letter + number), CORS from env
+- CI: `.github/workflows/ci.yml`
+
 ## Phase 4 UI (Dashboard Polish)
 
 ### Highlights

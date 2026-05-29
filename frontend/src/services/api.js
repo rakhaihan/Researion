@@ -63,6 +63,9 @@ export const api = {
   getProgress: (id) => request(`/research/${id}/progress`),
   getJob: (jobId) => request(`/jobs/${jobId}`),
   getReport: (id) => request(`/research/${id}/report`),
+  getQuality: (id) => request(`/research/${id}/quality`),
+  regenerateReport: (id) =>
+    request(`/research/${id}/regenerate-report`, { method: "POST" }),
 };
 
 export async function subscribeProgressStream(researchId, onEvent, signal) {

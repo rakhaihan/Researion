@@ -94,7 +94,7 @@ async def test_login_wrong_password_fails():
     with pytest.raises(HTTPException) as exc:
         await auth.login(
             db,
-            LoginRequest(email="usera@test.com", password="wrongpass"),
+            LoginRequest(email="usera@test.com", password="wrongpass9"),
         )
     assert exc.value.status_code == 401
 

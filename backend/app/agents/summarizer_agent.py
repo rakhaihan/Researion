@@ -1,6 +1,7 @@
 from typing import Any
 
 from app.agents.base import BaseAgent
+from app.schemas.agent_outputs import SourceSummaryItem
 from app.utils.prompts import SUMMARIZER_SYSTEM_PROMPT
 
 
@@ -22,7 +23,7 @@ class SummarizerAgent(BaseAgent):
         ]
 
         for source in credible_sources:
-            citation_key = source.get("citation_key", "")
+            citation_key = source.get("citation_key", "S1")
             user_prompt = (
                 f"Citation key: {citation_key}\n"
                 f"Title: {source.get('title')}\n"
@@ -33,31 +34,31 @@ class SummarizerAgent(BaseAgent):
                 f"{source.get('credibility_reason', '')}\n"
             )
 
-            fallback = {
-                "summary": source.get("snippet", "No summary available."),
-                "key_points": [
-                    f"[{citation_key}] {source.get('snippet', '')[:200]}"
-                ],
-                "useful_quotes": [],
-                "limitations": "Based on snippet only; full content not retrieved.",
-                "citation_key": citation_key,
-            }
+            fallback = SourceSummaryItem(
+                citation_key=citation_key,
+                summary=source.get("snippet", "No summary available.") or "Insufficient evidence.",
+                key_points=[f"[{citation_key}] {str(source.get('snippet', ''))[:200]}"],
+                useful_quotes=[],
+                limitations="Based on snippet only; full content not retrieved.",
+                source_url=source.get("url"),
+            )
 
-            result = await self.llm.generate_json(
+            result, _ = await self.llm.generate_structured(
                 SUMMARIZER_SYSTEM_PROMPT,
                 user_prompt,
-                fallback=fallback,
+                SourceSummaryItem,
+                fallback,
             )
 
             summaries.append(
                 {
-                    "citation_key": result.get("citation_key", citation_key),
+                    "citation_key": result.citation_key,
                     "source_url": source.get("url"),
                     "source_title": source.get("title"),
-                    "summary": result.get("summary", ""),
-                    "key_points": result.get("key_points", []),
-                    "useful_quotes": result.get("useful_quotes", []),
-                    "limitations": result.get("limitations", ""),
+                    "summary": result.summary,
+                    "key_points": result.key_points,
+                    "useful_quotes": result.useful_quotes,
+                    "limitations": result.limitations,
                 }
             )
 
