@@ -101,7 +101,19 @@ async def test_get_progress_returns_latest_status():
     db = AsyncMock()
     db.execute = AsyncMock(return_value=latest_result)
 
-    progress = await service.get_progress(db, research_id)
+    user_id = uuid4()
+    project_result = MagicMock()
+    project_result.scalar_one_or_none.return_value = ResearchProject(
+        id=research_id,
+        user_id=user_id,
+        topic="Test",
+        research_type=ResearchType.STOCK_CRYPTO,
+        depth=ResearchDepth.STANDARD,
+        status=ResearchStatus.PENDING,
+    )
+    db.execute = AsyncMock(side_effect=[project_result, latest_result])
+
+    progress = await service.get_progress(db, research_id, user_id)
 
     assert progress.research_id == research_id
     assert progress.job_id == "job-progress-1"

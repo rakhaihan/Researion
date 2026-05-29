@@ -129,9 +129,12 @@ class JobService:
         self,
         db: AsyncSession,
         job_id: str,
+        user_id: UUID,
     ) -> ResearchJob:
         result = await db.execute(
-            select(ResearchJob).where(ResearchJob.job_id == job_id)
+            select(ResearchJob)
+            .join(ResearchProject, ResearchJob.research_id == ResearchProject.id)
+            .where(ResearchJob.job_id == job_id, ResearchProject.user_id == user_id)
         )
         job = result.scalar_one_or_none()
         if job is None:
@@ -145,7 +148,20 @@ class JobService:
         self,
         db: AsyncSession,
         research_id: UUID,
+        user_id: UUID,
     ) -> ResearchProgressResponse:
+        project_result = await db.execute(
+            select(ResearchProject).where(
+                ResearchProject.id == research_id,
+                ResearchProject.user_id == user_id,
+            )
+        )
+        if project_result.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Research project not found",
+            )
+
         job = await self.get_latest_job(db, research_id)
         if job is None:
             raise HTTPException(

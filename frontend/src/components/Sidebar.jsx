@@ -1,4 +1,6 @@
 import { NavLink } from "react-router-dom";
+import Button from "./Button";
+import { useAuth } from "../contexts/AuthContext";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
@@ -7,6 +9,8 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const { user, logout } = useAuth();
+
   return (
     <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white lg:block">
       <div className="flex h-full flex-col p-6">
@@ -41,9 +45,16 @@ export default function Sidebar() {
           ))}
         </nav>
 
-        <div className="mt-auto rounded-xl bg-slate-50 p-4 text-xs text-slate-500">
-          Powered by LangGraph multi-agent workflow with planner, search, evaluator,
-          summarizer, analyst, critique, and report writer agents.
+        <div className="mt-auto space-y-3">
+          {user && (
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-900">{user.full_name}</p>
+              <p className="text-xs text-slate-500 truncate">{user.email}</p>
+            </div>
+          )}
+          <Button variant="secondary" className="w-full" onClick={logout}>
+            Logout
+          </Button>
         </div>
       </div>
     </aside>

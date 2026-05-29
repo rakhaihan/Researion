@@ -56,6 +56,32 @@ services:
 
 
 
+  migrate:
+
+    build:
+
+      context: ./backend
+
+    command: alembic upgrade head
+
+    env_file:
+
+      - ./backend/.env.example
+
+    environment:
+
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/researion
+
+    depends_on:
+
+      db:
+
+        condition: service_healthy
+
+    restart: "no"
+
+
+
   backend:
 
     build:
@@ -82,6 +108,10 @@ services:
 
       ALLOW_SEARCH_FALLBACK: "true"
 
+      AUTH_MODE: jwt
+
+      AUTO_CREATE_TABLES: "false"
+
     depends_on:
 
       db:
@@ -91,6 +121,10 @@ services:
       redis:
 
         condition: service_healthy
+
+      migrate:
+
+        condition: service_completed_successfully
 
     restart: unless-stopped
 
@@ -120,6 +154,10 @@ services:
 
       ALLOW_SEARCH_FALLBACK: "true"
 
+      AUTH_MODE: jwt
+
+      AUTO_CREATE_TABLES: "false"
+
     depends_on:
 
       db:
@@ -129,6 +167,10 @@ services:
       redis:
 
         condition: service_healthy
+
+      migrate:
+
+        condition: service_completed_successfully
 
     restart: unless-stopped
 

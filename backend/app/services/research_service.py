@@ -54,10 +54,12 @@ class ResearchService:
         self,
         db: AsyncSession,
         payload: ResearchCreate,
+        user_id: UUID,
     ) -> ResearchProject:
         topic = validate_topic(payload.topic)
 
         project = ResearchProject(
+            user_id=user_id,
             topic=topic,
             research_type=ResearchType(payload.research_type.value),
             depth=ResearchDepth(payload.depth.value),
@@ -68,9 +70,15 @@ class ResearchService:
         await db.refresh(project)
         return project
 
-    async def list_research(self, db: AsyncSession) -> list[ResearchProject]:
+    async def list_research(
+        self,
+        db: AsyncSession,
+        user_id: UUID,
+    ) -> list[ResearchProject]:
         result = await db.execute(
-            select(ResearchProject).order_by(ResearchProject.created_at.desc())
+            select(ResearchProject)
+            .where(ResearchProject.user_id == user_id)
+            .order_by(ResearchProject.created_at.desc())
         )
         return list(result.scalars().all())
 
@@ -78,8 +86,9 @@ class ResearchService:
         self,
         db: AsyncSession,
         research_id: UUID,
+        user_id: UUID | None = None,
     ) -> ResearchProject:
-        result = await db.execute(
+        query = (
             select(ResearchProject)
             .where(ResearchProject.id == research_id)
             .options(
@@ -88,6 +97,10 @@ class ResearchService:
                 selectinload(ResearchProject.final_report),
             )
         )
+        if user_id is not None:
+            query = query.where(ResearchProject.user_id == user_id)
+
+        result = await db.execute(query)
         project = result.scalar_one_or_none()
         if project is None:
             raise HTTPException(
@@ -136,8 +149,9 @@ class ResearchService:
         self,
         db: AsyncSession,
         research_id: UUID,
+        user_id: UUID,
     ) -> tuple[ResearchProject, ResearchJob]:
-        project = await self.get_research(db, research_id)
+        project = await self.get_research(db, research_id, user_id=user_id)
         job = await self.job_service.enqueue_research_job(db, project)
         await db.refresh(project)
         return project, job
@@ -148,7 +162,7 @@ class ResearchService:
         research_id: UUID,
         on_progress: ProgressHandler | None = None,
     ) -> ResearchProject:
-        project = await self.get_research(db, research_id)
+        project = await self.get_research(db, research_id, user_id=None)
         await self._clear_previous_results(db, project.id)
 
         state = await self.workflow.run(
@@ -166,8 +180,9 @@ class ResearchService:
         self,
         db: AsyncSession,
         research_id: UUID,
+        user_id: UUID,
     ) -> FinalReport:
-        project = await self.get_research(db, research_id)
+        project = await self.get_research(db, research_id, user_id=user_id)
         if project.final_report is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -179,18 +194,21 @@ class ResearchService:
         self,
         db: AsyncSession,
         research_id: UUID,
+        user_id: UUID,
     ) -> tuple[str, str]:
-        report = await self.get_report(db, research_id)
-        filename = f"{sanitize_filename((await self.get_research(db, research_id)).topic)}.md"
+        report = await self.get_report(db, research_id, user_id=user_id)
+        project = await self.get_research(db, research_id, user_id=user_id)
+        filename = f"{sanitize_filename(project.topic)}.md"
         return filename, report.markdown_content
 
     async def export_pdf(
         self,
         db: AsyncSession,
         research_id: UUID,
+        user_id: UUID,
     ) -> tuple[str, bytes]:
-        project = await self.get_research(db, research_id)
-        report = await self.get_report(db, research_id)
+        project = await self.get_research(db, research_id, user_id=user_id)
+        report = await self.get_report(db, research_id, user_id=user_id)
         filename = self.pdf_service.build_filename(project.topic)
         pdf_bytes = self.pdf_service.generate_pdf(
             title=report.markdown_content.split("\n")[0].lstrip("# ").strip()

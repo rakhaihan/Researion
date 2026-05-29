@@ -14,6 +14,8 @@ Multi-Agent Research Assistant — an AI-powered platform that automates researc
 - **Citation-aware reports** with inline `[S1][S2]` references and Sources appendix
 - Markdown and PDF export (preserves citations)
 - Modern React + Tailwind dashboard with source credibility badges
+- **JWT authentication** with per-user research isolation (Phase 3)
+- **Alembic migrations** for production-ready schema management
 - Docker Compose deployment
 
 ## Architecture
@@ -36,21 +38,94 @@ cp backend/.env.example backend/.env
 
 2. Optionally set `OPENAI_API_KEY` in `backend/.env` for LLM-powered agents. Without it, agents use structured fallbacks and mock search still works.
 
-3. Start all services (postgres, redis, backend, worker, frontend):
+3. Start all services (postgres, redis, **migrate**, backend, worker, frontend):
 
 ```bash
 docker-compose up --build
 ```
 
-4. Open:
+The `migrate` service runs `alembic upgrade head` before backend/worker start.
 
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
+4. Open http://localhost:5173 → **Register** a new account (Docker defaults to `AUTH_MODE=jwt`).
+
+5. API:
+
+- Backend: http://localhost:8000
 - API Docs: http://localhost:8000/docs
-- Health: http://localhost:8000/api/health
+- Health (public): http://localhost:8000/api/health
 
-> **Note:** If upgrading from an older version, reset the database to apply new schema/enums:
+> **Note:** Upgrading from Phase 1–2 without Alembic? Reset DB is easiest:
 > `docker-compose down -v && docker-compose up --build`
+
+## Authentication (Phase 3)
+
+### Environment
+
+```env
+AUTH_MODE=jwt          # jwt | api_key | disabled
+SECRET_KEY=your-long-random-secret
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+ALGORITHM=HS256
+AUTO_CREATE_TABLES=false
+API_KEY=               # required when AUTH_MODE=api_key
+```
+
+| AUTH_MODE | Behavior |
+|-----------|----------|
+| `jwt` | Register/login required; Bearer token on research endpoints |
+| `api_key` | `X-API-Key` header; uses dev user context |
+| `disabled` | Local dev bypass with auto dev user (`dev@researion.local`) |
+
+### Endpoints
+
+| Method | Endpoint | Auth |
+|--------|----------|------|
+| POST | `/api/auth/register` | Public |
+| POST | `/api/auth/login` | Public |
+| GET | `/api/auth/me` | Bearer |
+| GET | `/api/health` | Public |
+| All `/api/research/*`, `/api/jobs/*` | Bearer (jwt mode) |
+
+### Login example
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"password123"}'
+```
+
+Use token for research:
+
+```bash
+curl http://localhost:8000/api/research \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+## Database Migrations (Alembic)
+
+From `backend/`:
+
+```bash
+# Apply migrations
+alembic upgrade head
+
+# Create new migration after model changes
+alembic revision --autogenerate -m "describe change"
+alembic upgrade head
+```
+
+Migrations:
+
+| Revision | Description |
+|----------|-------------|
+| `001_initial_complete` | Full schema from SQLAlchemy metadata (users + research + jobs) |
+| `002_backfill_dev_user` | No-op on fresh DB; backfills legacy rows if needed |
+
+Manual migration in Docker:
+
+```bash
+docker compose run --rm migrate
+```
 
 ## Manual Development
 
@@ -225,6 +300,8 @@ SEARCH_PROVIDER=mock
 
 See `backend/.env.example` for all options:
 
+- `AUTH_MODE`, `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES` — Authentication
+- `AUTO_CREATE_TABLES` — Dev-only `create_all()` fallback (default: `false`)
 - `OPENAI_API_KEY` — OpenAI API key
 - `REDIS_URL` — Redis connection URL (default: `redis://localhost:6379/0`)
 - `SEARCH_PROVIDER` — `mock`, `tavily`, or `serpapi`

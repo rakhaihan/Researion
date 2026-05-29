@@ -3,7 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, get_research_service
+from app.api.deps import get_db, get_research_service, resolve_current_user
+from app.db.models import User
 from app.schemas.job import JobStatus, ResearchProgressResponse, ResearchRunResponse
 from app.schemas.research import (
     ResearchCreate,
@@ -20,8 +21,9 @@ async def create_research(
     payload: ResearchCreate,
     db: AsyncSession = Depends(get_db),
     service: ResearchService = Depends(get_research_service),
+    current_user: User = Depends(resolve_current_user),
 ) -> ResearchSummaryResponse:
-    project = await service.create_research(db, payload)
+    project = await service.create_research(db, payload, current_user.id)
     return ResearchSummaryResponse.model_validate(project)
 
 
@@ -29,8 +31,9 @@ async def create_research(
 async def list_research(
     db: AsyncSession = Depends(get_db),
     service: ResearchService = Depends(get_research_service),
+    current_user: User = Depends(resolve_current_user),
 ) -> list[ResearchSummaryResponse]:
-    projects = await service.list_research(db)
+    projects = await service.list_research(db, current_user.id)
     return [ResearchSummaryResponse.model_validate(project) for project in projects]
 
 
@@ -39,8 +42,9 @@ async def get_research_progress(
     research_id: UUID,
     db: AsyncSession = Depends(get_db),
     service: ResearchService = Depends(get_research_service),
+    current_user: User = Depends(resolve_current_user),
 ) -> ResearchProgressResponse:
-    return await service.job_service.get_progress(db, research_id)
+    return await service.job_service.get_progress(db, research_id, current_user.id)
 
 
 @router.get("/{research_id}", response_model=ResearchDetailResponse)
@@ -48,8 +52,9 @@ async def get_research(
     research_id: UUID,
     db: AsyncSession = Depends(get_db),
     service: ResearchService = Depends(get_research_service),
+    current_user: User = Depends(resolve_current_user),
 ) -> ResearchDetailResponse:
-    project = await service.get_research(db, research_id)
+    project = await service.get_research(db, research_id, user_id=current_user.id)
     return service.to_detail_response(project)
 
 
@@ -58,8 +63,9 @@ async def run_research(
     research_id: UUID,
     db: AsyncSession = Depends(get_db),
     service: ResearchService = Depends(get_research_service),
+    current_user: User = Depends(resolve_current_user),
 ) -> ResearchRunResponse:
-    project, job = await service.enqueue_research_run(db, research_id)
+    project, job = await service.enqueue_research_run(db, research_id, current_user.id)
 
     if job.status == JobStatus.QUEUED:
         message = "Research job queued successfully"

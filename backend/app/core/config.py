@@ -22,6 +22,10 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://postgres:postgres@localhost:5432/researion",
         description="Async PostgreSQL connection string",
     )
+    auto_create_tables: bool = Field(
+        default=False,
+        description="Use create_all on startup (dev only; prefer Alembic in production)",
+    )
 
     redis_url: str = Field(
         default="redis://localhost:6379/0",
@@ -41,6 +45,22 @@ class Settings(BaseSettings):
         default=True,
         description="Fall back to mock search when live provider fails",
     )
+
+    auth_mode: Literal["jwt", "api_key", "disabled"] = Field(
+        default="disabled",
+        description="jwt | api_key | disabled (local dev bypass)",
+    )
+    secret_key: str = Field(
+        default="change-me-use-a-long-random-secret-in-production",
+        description="JWT signing secret",
+    )
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60
+    api_key: str | None = Field(default=None, description="Required when AUTH_MODE=api_key")
+
+    dev_user_email: str = "dev@researion.local"
+    dev_user_password: str = "devpassword123"
+    dev_user_full_name: str = "Development User"
 
     cors_origins: list[str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"]

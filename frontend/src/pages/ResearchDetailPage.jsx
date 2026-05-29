@@ -8,7 +8,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import ProgressBar from "../components/ProgressBar";
 import SourcesPanel from "../components/SourcesPanel";
 import { useResearchProgress } from "../hooks/useResearchProgress";
-import { api, getExportUrl } from "../services/api";
+import { api, downloadExport } from "../services/api";
 
 const RUNNING_RESEARCH_STATUSES = new Set([
   "queued",
@@ -132,12 +132,12 @@ export default function ResearchDetailPage() {
           )}
           {markdownContent && (
             <>
-              <a href={getExportUrl(id, "markdown")} target="_blank" rel="noreferrer">
-                <Button variant="secondary">Export Markdown</Button>
-              </a>
-              <a href={getExportUrl(id, "pdf")} target="_blank" rel="noreferrer">
-                <Button variant="secondary">Export PDF</Button>
-              </a>
+              <Button variant="secondary" onClick={() => downloadExport(id, "markdown")}>
+                Export Markdown
+              </Button>
+              <Button variant="secondary" onClick={() => downloadExport(id, "pdf")}>
+                Export PDF
+              </Button>
             </>
           )}
         </div>

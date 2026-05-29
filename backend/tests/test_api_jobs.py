@@ -5,7 +5,9 @@ from uuid import uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.api.deps import get_db, get_research_service
+from app.api.deps import get_db, get_research_service, resolve_current_user
+from app.core.password import hash_password
+from app.db.models import User
 from app.db.models import JobStatus, ResearchJob, ResearchProject, ResearchStatus, ResearchType, ResearchDepth
 from app.main import app
 from app.schemas.job import ResearchProgressResponse
@@ -24,6 +26,20 @@ def _make_project() -> ResearchProject:
         research_type=ResearchType.STOCK_CRYPTO,
         depth=ResearchDepth.STANDARD,
         status=ResearchStatus.QUEUED,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _make_user_for_project(project: ResearchProject) -> User:
+    now = datetime.now(UTC)
+    return User(
+        id=uuid4(),
+        full_name="Test User",
+        email="test@example.com",
+        hashed_password=hash_password("password123"),
+        is_active=True,
+        is_superuser=False,
         created_at=now,
         updated_at=now,
     )
@@ -54,8 +70,11 @@ async def test_run_endpoint_returns_job_id():
     async def override_db():
         yield AsyncMock()
 
+    user = _make_user_for_project(project)
+
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_research_service] = lambda: mock_service
+    app.dependency_overrides[resolve_current_user] = lambda: user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -92,8 +111,11 @@ async def test_progress_endpoint_returns_status():
     async def override_db():
         yield AsyncMock()
 
+    user = _make_user_for_project(project)
+
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_research_service] = lambda: mock_service
+    app.dependency_overrides[resolve_current_user] = lambda: user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
