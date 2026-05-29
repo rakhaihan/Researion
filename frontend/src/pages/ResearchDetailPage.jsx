@@ -1,25 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
-import Badge from "../components/Badge";
-import Button from "../components/Button";
-import Card from "../components/Card";
-import LoadingSpinner from "../components/LoadingSpinner";
-import ProgressBar from "../components/ProgressBar";
-import SourcesPanel from "../components/SourcesPanel";
+import Badge from "../components/ui/Badge";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import Alert from "../components/ui/Alert";
+import ProgressBar from "../components/ui/ProgressBar";
+import SectionHeader from "../components/ui/SectionHeader";
+import { SkeletonList } from "../components/ui/Skeleton";
+import WorkflowStepper from "../components/workflow/WorkflowStepper";
+import ReportViewer from "../components/research/ReportViewer";
+import SourcesPanel from "../components/research/SourcesPanel";
 import { useResearchProgress } from "../hooks/useResearchProgress";
-import { api, downloadExport } from "../services/api";
-
-const RUNNING_RESEARCH_STATUSES = new Set([
-  "queued",
-  "planning",
-  "searching",
-  "evaluating",
-  "summarizing",
-  "analyzing",
-  "critiquing",
-  "writing",
-]);
+import { api } from "../services/api";
+import { getStageDescription } from "../utils/workflowSteps";
+import { RUNNING_STATUSES } from "../utils/researchConfig";
 
 export default function ResearchDetailPage() {
   const { id } = useParams();
@@ -28,7 +22,10 @@ export default function ResearchDetailPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const { progress, startPolling, fetchProgress, isActive } = useResearchProgress(
+  const [highlightCitation, setHighlightCitation] = useState(null);
+  const [debugOpen, setDebugOpen] = useState(false);
+
+  const { progress, transport, startPolling, fetchProgress, isActive } = useResearchProgress(
     id,
     project?.status,
   );
@@ -86,25 +83,25 @@ export default function ResearchDetailPage() {
   const isRunning =
     submitting ||
     isActive ||
-    RUNNING_RESEARCH_STATUSES.has(project?.status) ||
+    RUNNING_STATUSES.has(project?.status) ||
     progress?.status === "running" ||
     progress?.status === "queued";
 
   const canRun = project && project.status !== "completed" && !isRunning;
-  const progressLabel =
-    progress?.current_step_label ||
-    (project?.status === "queued" ? "Queued for processing" : "Processing research workflow");
-
+  const stageDescription = getStageDescription(progress, project?.status);
   const markdownContent = report?.markdown_content || "";
+  const failed = progress?.status === "failed" || project?.status === "failed";
 
   if (loading) {
-    return <LoadingSpinner label="Loading research details..." />;
+    return <SkeletonList count={3} />;
   }
 
   if (!project) {
     return (
       <Card>
-        <p className="text-sm text-slate-600">Research project not found.</p>
+        <Alert variant="error" title="Not found">
+          Research project could not be loaded.
+        </Alert>
       </Card>
     );
   }
@@ -116,69 +113,88 @@ export default function ResearchDetailPage() {
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge status={project.status} />
             <span className="text-xs text-slate-500">{project.research_type}</span>
-            <span className="text-xs text-slate-500 capitalize">Depth: {project.depth}</span>
+            <span className="text-xs capitalize text-slate-500">Depth: {project.depth}</span>
+            {project.has_report && (
+              <span className="text-xs text-emerald-600">Report ready</span>
+            )}
           </div>
           <h2 className="text-2xl font-bold text-slate-900">{project.topic}</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Updated {new Date(project.updated_at).toLocaleString()}
+            Created {new Date(project.created_at).toLocaleString()} · Updated{" "}
+            {new Date(project.updated_at).toLocaleString()}
           </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
           {canRun && (
             <Button onClick={handleRun} disabled={submitting}>
-              {submitting ? "Starting workflow..." : "Run Multi-Agent Workflow"}
+              {submitting ? "Starting workflow…" : "Run multi-agent workflow"}
             </Button>
-          )}
-          {markdownContent && (
-            <>
-              <Button variant="secondary" onClick={() => downloadExport(id, "markdown")}>
-                Export Markdown
-              </Button>
-              <Button variant="secondary" onClick={() => downloadExport(id, "pdf")}>
-                Export PDF
-              </Button>
-            </>
           )}
         </div>
       </div>
 
       {(isRunning || progress) && (
         <Card>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-slate-900">Workflow Progress</h3>
-              {progress?.job_id && (
-                <span className="text-xs text-slate-500">
-                  Job: {progress.job_id.slice(0, 8)}...
+          <SectionHeader
+            title="Workflow progress"
+            description={stageDescription}
+            actions={
+              transport !== "idle" && (
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                  {transport === "sse" ? "Live (SSE)" : "Polling"}
                 </span>
-              )}
-            </div>
-            <ProgressBar value={progress?.progress_percentage ?? 0} label={progressLabel} />
-            {isRunning && !progress && (
-              <LoadingSpinner label="Waiting for worker to pick up the job..." />
-            )}
+              )
+            }
+          />
+          <div className="space-y-6">
+            <ProgressBar
+              value={progress?.progress_percentage ?? 0}
+              label={progress?.current_step_label || stageDescription}
+            />
+            <WorkflowStepper progress={progress} projectStatus={project.status} />
+
+            <details
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+              open={debugOpen}
+              onToggle={(e) => setDebugOpen(e.target.open)}
+            >
+              <summary className="cursor-pointer font-medium text-slate-700">Debug info</summary>
+              <dl className="mt-2 space-y-1">
+                {progress?.job_id && (
+                  <div>
+                    <dt className="inline font-medium">job_id: </dt>
+                    <dd className="inline font-mono">{progress.job_id}</dd>
+                  </div>
+                )}
+                {progress?.started_at && (
+                  <div>
+                    <dt className="inline font-medium">started_at: </dt>
+                    <dd className="inline">{new Date(progress.started_at).toLocaleString()}</dd>
+                  </div>
+                )}
+                {progress?.updated_at && (
+                  <div>
+                    <dt className="inline font-medium">updated_at: </dt>
+                    <dd className="inline">{new Date(progress.updated_at).toLocaleString()}</dd>
+                  </div>
+                )}
+              </dl>
+            </details>
           </div>
         </Card>
       )}
 
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <Alert variant="error">{error}</Alert>}
 
-      {(project.error_message || progress?.error_message) && (
-        <Card>
-          <h3 className="mb-2 font-semibold text-red-700">Workflow Error</h3>
-          <p className="text-sm text-slate-600">
-            {progress?.error_message || project.error_message}
-          </p>
-        </Card>
+      {failed && (project.error_message || progress?.error_message) && (
+        <Alert variant="error" title="Workflow failed">
+          {progress?.error_message || project.error_message}
+        </Alert>
       )}
 
       <Card>
-        <h3 className="mb-4 font-semibold text-slate-900">Generated Questions</h3>
+        <SectionHeader title="Generated questions" />
         {project.questions?.length ? (
           <ol className="space-y-3 text-sm text-slate-700">
             {project.questions.map((question) => (
@@ -194,19 +210,30 @@ export default function ResearchDetailPage() {
       </Card>
 
       {markdownContent && (
-        <Card>
-          <h3 className="mb-4 text-xl font-semibold text-slate-900">Final Report</h3>
-          <div className="markdown-body prose max-w-none text-slate-700">
-            <ReactMarkdown>{markdownContent}</ReactMarkdown>
-          </div>
-        </Card>
+        <ReportViewer
+          researchId={id}
+          markdownContent={markdownContent}
+          onCitationClick={(key) => {
+            setHighlightCitation(key);
+            document.getElementById(`source-${key}`)?.scrollIntoView({ behavior: "smooth" });
+          }}
+        />
       )}
 
       <Card>
-        <h3 className="mb-4 font-semibold text-slate-900">Sources & Citations</h3>
+        <SectionHeader
+          title="Sources & citations"
+          description={
+            project.source_count
+              ? `${project.source_count} source(s) collected`
+              : "Sources appear after search and evaluation"
+          }
+        />
         <SourcesPanel
           sources={project.sources}
           showWarning={project.low_credibility_warning}
+          highlightKey={highlightCitation}
+          onHighlight={setHighlightCitation}
         />
       </Card>
     </div>

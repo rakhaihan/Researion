@@ -1,80 +1,129 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../services/api";
+import { api, subscribeProgressStream } from "../services/api";
+import { ACTIVE_JOB_STATUSES, RUNNING_STATUSES } from "../utils/researchConfig";
 
-const ACTIVE_JOB_STATUSES = new Set(["queued", "running"]);
-const ACTIVE_RESEARCH_STATUSES = new Set([
-  "queued",
-  "planning",
-  "searching",
-  "evaluating",
-  "summarizing",
-  "analyzing",
-  "critiquing",
-  "writing",
-]);
+const POLL_INTERVAL_MS = 2000;
+const TERMINAL_STATUSES = new Set(["completed", "failed"]);
 
-const POLL_INTERVAL_MS = 2500;
-
-export function useResearchProgress(researchId, projectStatus) {
+export function useResearchProgress(researchId, projectStatus, enabled = true) {
   const [progress, setProgress] = useState(null);
-  const [polling, setPolling] = useState(false);
+  const [transport, setTransport] = useState("idle");
+  const [forcePoll, setForcePoll] = useState(false);
   const intervalRef = useRef(null);
+  const streamAbortRef = useRef(null);
+  const tabVisibleRef = useRef(true);
 
-  const shouldPoll =
-    ACTIVE_JOB_STATUSES.has(progress?.status) ||
-    ACTIVE_RESEARCH_STATUSES.has(projectStatus);
+  const shouldTrack =
+    enabled &&
+    (forcePoll ||
+      ACTIVE_JOB_STATUSES.has(progress?.status) ||
+      RUNNING_STATUSES.has(projectStatus));
 
   const fetchProgress = useCallback(async () => {
+    if (!researchId) return null;
     try {
       const data = await api.getProgress(researchId);
       setProgress(data);
       return data;
-    } catch {
-      return null;
+    } catch (err) {
+      if (err.message?.includes("404") || err.message?.includes("No job")) {
+        return null;
+      }
+      throw err;
     }
   }, [researchId]);
 
-  const startPolling = useCallback(() => {
-    setPolling(true);
-  }, []);
-
-  const stopPolling = useCallback(() => {
-    setPolling(false);
+  const stopTracking = useCallback(() => {
+    setForcePoll(false);
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    if (streamAbortRef.current) {
+      streamAbortRef.current.abort();
+      streamAbortRef.current = null;
+    }
+    setTransport("idle");
+  }, []);
+
+  const startPolling = useCallback(() => {
+    setForcePoll(true);
   }, []);
 
   useEffect(() => {
-    if (!researchId) return undefined;
+    const onVisibility = () => {
+      tabVisibleRef.current = document.visibilityState === "visible";
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
-    if (shouldPoll || polling) {
-      fetchProgress();
-      intervalRef.current = setInterval(fetchProgress, POLL_INTERVAL_MS);
-      return () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-      };
+  useEffect(() => {
+    if (!researchId || !shouldTrack) {
+      stopTracking();
+      return undefined;
     }
 
-    return undefined;
-  }, [researchId, shouldPoll, polling, fetchProgress]);
+    let cancelled = false;
+
+    const pollOnce = async () => {
+      if (!tabVisibleRef.current) return;
+      try {
+        const data = await fetchProgress();
+        if (data && TERMINAL_STATUSES.has(data.status)) {
+          stopTracking();
+        }
+      } catch {
+        /* 401 handled in api.request */
+      }
+    };
+
+    const startPollingLoop = () => {
+      setTransport("polling");
+      pollOnce();
+      intervalRef.current = setInterval(pollOnce, POLL_INTERVAL_MS);
+    };
+
+    const startStream = () => {
+      streamAbortRef.current = new AbortController();
+      setTransport("sse");
+      subscribeProgressStream(
+        researchId,
+        (data) => {
+          if (cancelled) return;
+          setProgress(data);
+          if (TERMINAL_STATUSES.has(data.status)) {
+            stopTracking();
+          }
+        },
+        streamAbortRef.current.signal,
+      ).catch(() => {
+        if (!cancelled) {
+          startPollingLoop();
+        }
+      });
+    };
+
+    startStream();
+
+    return () => {
+      cancelled = true;
+      stopTracking();
+    };
+  }, [researchId, shouldTrack, fetchProgress, stopTracking]);
 
   useEffect(() => {
     if (progress?.status === "completed" || progress?.status === "failed") {
-      stopPolling();
+      stopTracking();
     }
-  }, [progress?.status, stopPolling]);
+  }, [progress?.status, stopTracking]);
 
   return {
     progress,
-    polling,
+    transport,
     startPolling,
-    stopPolling,
+    stopPolling: stopTracking,
     fetchProgress,
-    isActive: shouldPoll || polling,
+    isActive: shouldTrack,
   };
 }

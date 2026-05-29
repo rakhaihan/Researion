@@ -263,6 +263,7 @@ class JobService:
             current_step_label=STEP_LABELS.get(step, step) if step else None,
             progress_percentage=job.progress_percentage,
             error_message=job.error_message,
+            started_at=job.started_at,
             updated_at=job.updated_at,
         )
 

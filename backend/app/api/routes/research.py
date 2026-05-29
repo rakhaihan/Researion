@@ -1,9 +1,13 @@
+import asyncio
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_research_service, resolve_current_user
+from app.db.database import AsyncSessionLocal
 from app.db.models import User
 from app.schemas.job import JobStatus, ResearchProgressResponse, ResearchRunResponse
 from app.schemas.research import (
@@ -45,6 +49,46 @@ async def get_research_progress(
     current_user: User = Depends(resolve_current_user),
 ) -> ResearchProgressResponse:
     return await service.job_service.get_progress(db, research_id, current_user.id)
+
+
+@router.get("/{research_id}/progress/stream")
+async def stream_research_progress(
+    research_id: UUID,
+    service: ResearchService = Depends(get_research_service),
+    current_user: User = Depends(resolve_current_user),
+) -> StreamingResponse:
+    user_id = current_user.id
+
+    async def event_generator():
+        terminal = {JobStatus.COMPLETED, JobStatus.FAILED}
+        while True:
+            async with AsyncSessionLocal() as db:
+                progress = await service.job_service.get_progress(db, research_id, user_id)
+            payload = {
+                "research_id": str(progress.research_id),
+                "job_id": progress.job_id,
+                "status": progress.status.value,
+                "current_step": progress.current_step,
+                "current_step_label": progress.current_step_label,
+                "progress_percentage": progress.progress_percentage,
+                "error_message": progress.error_message,
+                "started_at": progress.started_at.isoformat() if progress.started_at else None,
+                "updated_at": progress.updated_at.isoformat(),
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+            if progress.status in terminal:
+                break
+            await asyncio.sleep(2)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{research_id}", response_model=ResearchDetailResponse)

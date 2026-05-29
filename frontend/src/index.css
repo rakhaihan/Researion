@@ -29,3 +29,36 @@ body {
 .markdown-body a {
   @apply text-brand-600 hover:underline;
 }
+
+.markdown-body ol {
+  @apply list-decimal pl-6 mb-4 space-y-1;
+}
+
+.markdown-body blockquote {
+  @apply border-l-4 border-brand-500 bg-slate-50 pl-4 py-2 my-4 italic text-slate-700;
+}
+
+.markdown-body pre {
+  @apply overflow-x-auto rounded-lg bg-slate-900 p-4 text-sm text-slate-100 mb-4;
+}
+
+.markdown-body code {
+  @apply rounded bg-slate-100 px-1 py-0.5 text-sm font-mono text-slate-800;
+}
+
+.markdown-body pre code {
+  @apply bg-transparent p-0 text-slate-100;
+}
+
+.markdown-body table {
+  @apply w-full border-collapse text-sm mb-4;
+}
+
+.markdown-body th,
+.markdown-body td {
+  @apply border border-slate-200 px-3 py-2 text-left;
+}
+
+.markdown-body th {
+  @apply bg-slate-100 font-semibold;
+}

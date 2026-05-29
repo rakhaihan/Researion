@@ -65,6 +65,50 @@ export const api = {
   getReport: (id) => request(`/research/${id}/report`),
 };
 
+export async function subscribeProgressStream(researchId, onEvent, signal) {
+  const token = getToken();
+  const headers = { Accept: "text/event-stream" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}/research/${researchId}/progress/stream`, {
+    headers,
+    signal,
+  });
+
+  if (response.status === 401) {
+    clearAuth();
+    window.location.href = "/login";
+    throw new Error("Session expired");
+  }
+
+  if (!response.ok) {
+    throw new Error(`SSE failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() || "";
+    for (const part of parts) {
+      const line = part.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      try {
+        const payload = JSON.parse(line.slice(6));
+        onEvent(payload);
+        if (payload.status === "completed" || payload.status === "failed") return;
+      } catch {
+        /* ignore malformed chunks */
+      }
+    }
+  }
+}
+
 export async function downloadExport(researchId, format) {
   const token = getToken();
   const headers = {};

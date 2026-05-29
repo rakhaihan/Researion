@@ -50,6 +50,7 @@ class ResearchProgressResponse(BaseModel):
     current_step_label: str | None = None
     progress_percentage: int
     error_message: str | None
+    started_at: datetime | None = None
     updated_at: datetime
 
 

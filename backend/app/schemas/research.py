@@ -122,3 +122,5 @@ class ResearchDetailResponse(ResearchSummaryResponse):
     final_report: FinalReportBriefResponse | None = None
     error_message: str | None = None
     low_credibility_warning: bool = False
+    source_count: int = 0
+    has_report: bool = False

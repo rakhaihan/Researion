@@ -143,6 +143,8 @@ class ResearchService:
             final_report=final_report,
             error_message=project.error_message,
             low_credibility_warning=low_credibility_warning,
+            source_count=len(project.sources),
+            has_report=final_report is not None,
         )
 
     async def enqueue_research_run(

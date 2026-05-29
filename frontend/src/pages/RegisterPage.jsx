@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import Button from "../components/Button";
-import Card from "../components/Card";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Alert from "../components/ui/Alert";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function RegisterPage() {
@@ -34,44 +36,36 @@ export default function RegisterPage() {
         <p className="mb-6 text-sm text-slate-600">Start automated research with Researion.</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Full name</label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none ring-brand-500 focus:ring-2"
-            />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none ring-brand-500 focus:ring-2"
-            />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none ring-brand-500 focus:ring-2"
-            />
-            <p className="mt-1 text-xs text-slate-500">Minimum 8 characters</p>
-          </div>
+          <Input
+            label="Full name"
+            name="fullName"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+            autoComplete="name"
+          />
+          <Input
+            label="Email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+          <Input
+            label="Password"
+            name="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={8}
+            hint="Minimum 8 characters"
+            autoComplete="new-password"
+          />
 
-          {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+          {error && <Alert variant="error">{error}</Alert>}
 
           <Button type="submit" disabled={submitting} className="w-full">
             {submitting ? "Creating account..." : "Register"}

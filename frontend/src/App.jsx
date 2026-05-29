@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import Layout from "./components/Layout";
+import AppShell from "./components/layout/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 import HistoryPage from "./pages/HistoryPage";
@@ -18,7 +18,7 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
 
           <Route element={<ProtectedRoute />}>
-            <Route element={<Layout />}>
+            <Route element={<AppShell />}>
               <Route index element={<HomePage />} />
               <Route path="new" element={<NewResearchPage />} />
               <Route path="history" element={<HistoryPage />} />

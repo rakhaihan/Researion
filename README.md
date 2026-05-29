@@ -13,7 +13,9 @@ Multi-Agent Research Assistant — an AI-powered platform that automates researc
 - **Tavily live search** with mock fallback and URL deduplication
 - **Citation-aware reports** with inline `[S1][S2]` references and Sources appendix
 - Markdown and PDF export (preserves citations)
-- Modern React + Tailwind dashboard with source credibility badges
+- Modern React + Tailwind dashboard with design system, workflow stepper, and polished report viewer (Phase 4)
+- **SSE progress stream** with polling fallback (~2s) and tab-visibility aware updates
+- Source credibility badges, filters, and citation navigation
 - **JWT authentication** with per-user research isolation (Phase 3)
 - **Alembic migrations** for production-ready schema management
 - Docker Compose deployment
@@ -158,7 +160,9 @@ The worker consumes jobs from Redis and executes the multi-agent LangGraph workf
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev      # http://localhost:5173
+npm run build    # production bundle
+npm test         # Vitest unit tests
 ```
 
 Set `VITE_API_URL=http://localhost:8000/api` if needed.
@@ -171,7 +175,8 @@ Set `VITE_API_URL=http://localhost:8000/api` if needed.
 2. API validates research, creates a `ResearchJob`, enqueues to Redis, returns `job_id` immediately
 3. Worker picks up the job and runs agents sequentially
 4. Each agent step updates progress in PostgreSQL
-5. Frontend polls `GET /api/research/{id}/progress` every ~2.5 seconds
+5. Frontend uses **SSE** `GET /api/research/{id}/progress/stream` when available, with **polling fallback** every ~2 seconds
+6. Polling pauses when the browser tab is hidden (reduces request spam)
 
 ### Progress Steps
 
@@ -195,6 +200,7 @@ Set `VITE_API_URL=http://localhost:8000/api` if needed.
 | GET | `/api/research/{id}` | Get research detail |
 | POST | `/api/research/{id}/run` | Queue background workflow (returns `job_id`) |
 | GET | `/api/research/{id}/progress` | Get latest job progress |
+| GET | `/api/research/{id}/progress/stream` | Server-Sent Events progress stream (Bearer auth) |
 | GET | `/api/jobs/{job_id}` | Get job status by job ID |
 | GET | `/api/research/{id}/report` | Get final report |
 | GET | `/api/research/{id}/export/markdown` | Export Markdown |
@@ -310,14 +316,59 @@ See `backend/.env.example` for all options:
 - `SERPAPI_API_KEY` — SerpAPI key (optional)
 - `DATABASE_URL` — PostgreSQL async connection string
 
+## Phase 4 UI (Dashboard Polish)
+
+### Highlights
+
+- **App shell**: Sidebar with Researion branding, topbar (user, auth status, logout), responsive mobile menu
+- **Design system** (`frontend/src/components/ui/`): Button, Card, Input, Select, Badge, Alert, Skeleton, ProgressBar, PageHeader, SectionHeader, EmptyState
+- **New Research**: Template cards by type, depth selector, dynamic placeholders, client validation (topic ≥ 10 chars)
+- **Workflow stepper**: 8 steps with pending / running / completed / failed mapping from `current_step`
+- **Report viewer**: Styled markdown, sticky export toolbar, copy markdown, clickable `[S1]` citations → sources panel
+- **Sources panel**: Credibility tier filters, collapsible rationale, low-credibility warning
+- **History**: Search + filter by type/status, sort by latest
+- **Dashboard**: Hero, stats cards, recent research, pipeline overview
+
+### Screenshots
+
+> Placeholder: add screenshots of Dashboard, Research Detail (stepper), and Report viewer to `docs/screenshots/` when available.
+
+### Run frontend tests
+
+```bash
+cd frontend
+npm install
+npm test
+```
+
+### Polling vs SSE
+
+| Mode | When | Endpoint |
+|------|------|----------|
+| SSE (preferred) | After workflow starts, tab visible | `GET /api/research/{id}/progress/stream` |
+| Polling (fallback) | SSE error or unsupported | `GET /api/research/{id}/progress` every 2s |
+
+Both stop automatically when status is `completed` or `failed`.
+
+### Auth / token troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| Redirected to login unexpectedly | Token expired — sign in again; check `ACCESS_TOKEN_EXPIRE_MINUTES` |
+| 401 on API calls | Ensure `Authorization: Bearer <token>`; clear `localStorage` key `researion_token` |
+| SSE fails but polling works | Normal fallback; verify backend exposes stream route and CORS allows streaming |
+
 ## Testing
 
 ```bash
 cd backend
 pytest
+
+cd frontend
+npm test
 ```
 
-Tests cover agents, services, background job enqueue/progress, duplicate job prevention, and API endpoints.
+Tests cover agents, services, background job enqueue/progress, SSE stream, auth, duplicate job prevention, workflow step mapping, and UI validation.
 
 ## Manual Test Checklist
 
