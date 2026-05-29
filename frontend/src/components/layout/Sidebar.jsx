@@ -1,10 +1,13 @@
 import { NavLink } from "react-router-dom";
+import WorkspaceSelector from "../workspace/WorkspaceSelector";
 
 const navItems = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/new", label: "New Research" },
-  { to: "/documents", label: "Knowledge Base" },
   { to: "/history", label: "History" },
+  { to: "/documents", label: "Knowledge Base" },
+  { to: "/shared", label: "Shared Reports" },
+  { to: "/workspaces", label: "Workspace Settings" },
 ];
 
 export default function Sidebar({ open, onClose }) {
@@ -32,6 +35,7 @@ export default function Sidebar({ open, onClose }) {
             <p className="text-xs text-slate-500">Research workspace</p>
           </div>
         </div>
+        <WorkspaceSelector />
         <nav className="flex-1 space-y-1 p-4" aria-label="Main navigation">
           {navItems.map((item) => (
             <NavLink

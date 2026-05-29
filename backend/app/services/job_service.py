@@ -16,6 +16,7 @@ from app.db.models import (
     ResearchStep,
 )
 from app.schemas.job import STEP_LABELS, ResearchProgressResponse
+from app.services.permission_service import PermissionService
 
 logger = get_logger(__name__)
 
@@ -151,12 +152,13 @@ class JobService:
         user_id: UUID,
     ) -> ResearchProgressResponse:
         project_result = await db.execute(
-            select(ResearchProject).where(
-                ResearchProject.id == research_id,
-                ResearchProject.user_id == user_id,
-            )
+            select(ResearchProject).where(ResearchProject.id == research_id)
         )
-        if project_result.scalar_one_or_none() is None:
+        project = project_result.scalar_one_or_none()
+        permissions = PermissionService()
+        if project is None or not await permissions.can_view_research(
+            db, project, user_id
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Research project not found",

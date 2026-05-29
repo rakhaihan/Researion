@@ -177,6 +177,7 @@ async def test_create_research_assigns_current_user():
     db.refresh = AsyncMock()
 
     service = ResearchService()
+    service.workspace_service.get_default_workspace_id = AsyncMock(return_value=uuid4())
     payload = ResearchCreate(
         topic="Test topic for research",
         research_type=RT.MARKET_RESEARCH,

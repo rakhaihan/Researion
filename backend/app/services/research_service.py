@@ -1,5 +1,5 @@
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -36,7 +36,10 @@ from app.schemas.research import (
 from app.services.document_service import DocumentService
 from app.services.job_service import JobService
 from app.services.pdf_service import PDFService
+from app.services.permission_service import PermissionService
 from app.services.quality_evaluation_service import QualityEvaluationService
+from app.services.version_service import VersionService
+from app.services.workspace_service import WorkspaceService
 from app.utils.validators import sanitize_filename, validate_topic
 from app.workflows.research_graph import ResearchWorkflow
 
@@ -54,6 +57,9 @@ class ResearchService:
         self.report_writer = ReportWriterAgent()
         self.critique_agent = CritiqueAgent()
         self.document_service = DocumentService()
+        self.permissions = PermissionService()
+        self.workspace_service = WorkspaceService()
+        self.version_service = VersionService()
 
     @property
     def workflow(self) -> ResearchWorkflow:
@@ -76,8 +82,19 @@ class ResearchService:
                 db, user_id, document_ids
             )
 
+        if payload.workspace_id:
+            workspace_id = payload.workspace_id
+            if not await self.permissions.can_create_research(db, workspace_id, user_id):
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    detail="Cannot create research in this workspace",
+                )
+        else:
+            workspace_id = await self.workspace_service.get_default_workspace_id(db, user_id)
+
         project = ResearchProject(
             user_id=user_id,
+            workspace_id=workspace_id,
             topic=topic,
             research_type=ResearchType(payload.research_type.value),
             depth=ResearchDepth(payload.depth.value),
@@ -94,12 +111,50 @@ class ResearchService:
         self,
         db: AsyncSession,
         user_id: UUID,
+        *,
+        workspace_id: UUID | None = None,
+        status: str | None = None,
+        research_type: str | None = None,
+        source_mode: str | None = None,
+        pinned: bool | None = None,
+        archived: bool = False,
+        q: str | None = None,
+        sort: str = "latest",
     ) -> list[ResearchProject]:
-        result = await db.execute(
-            select(ResearchProject)
-            .where(ResearchProject.user_id == user_id)
-            .order_by(ResearchProject.created_at.desc())
+        workspace_ids = await self.permissions.accessible_workspace_ids(db, user_id)
+        query = select(ResearchProject).where(
+            self.permissions.research_access_filter(user_id, workspace_ids)
         )
+        if workspace_id:
+            if workspace_id not in workspace_ids:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+            query = query.where(ResearchProject.workspace_id == workspace_id)
+        if archived:
+            query = query.where(ResearchProject.archived_at.isnot(None))
+        else:
+            query = query.where(ResearchProject.archived_at.is_(None))
+        if status:
+            query = query.where(ResearchProject.status == ResearchStatus(status))
+        if research_type:
+            query = query.where(ResearchProject.research_type == ResearchType(research_type))
+        if source_mode:
+            query = query.where(
+                ResearchProject.research_source_mode == ResearchSourceMode(source_mode)
+            )
+        if pinned is True:
+            query = query.where(ResearchProject.is_pinned.is_(True))
+        elif pinned is False:
+            query = query.where(ResearchProject.is_pinned.is_(False))
+        if q:
+            query = query.where(ResearchProject.topic.ilike(f"%{q}%"))
+        if sort == "oldest":
+            order = ResearchProject.created_at.asc()
+        elif sort == "title":
+            order = ResearchProject.topic.asc()
+        else:
+            order = ResearchProject.updated_at.desc()
+        query = query.order_by(ResearchProject.is_pinned.desc(), order)
+        result = await db.execute(query)
         return list(result.scalars().all())
 
     async def get_research(
@@ -118,9 +173,6 @@ class ResearchService:
                 selectinload(ResearchProject.quality_evaluation),
             )
         )
-        if user_id is not None:
-            query = query.where(ResearchProject.user_id == user_id)
-
         result = await db.execute(query)
         project = result.scalar_one_or_none()
         if project is None:
@@ -128,6 +180,8 @@ class ResearchService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Research project not found",
             )
+        if user_id is not None:
+            await self.permissions.require_view_research(db, project, user_id)
         return project
 
     def to_detail_response(self, project: ResearchProject) -> ResearchDetailResponse:
@@ -161,6 +215,9 @@ class ResearchService:
             status=project.status,
             research_source_mode=ResearchSourceModeSchema(project.research_source_mode.value),
             document_ids=[UUID(doc_id) for doc_id in (project.document_ids or [])],
+            workspace_id=project.workspace_id,
+            is_pinned=project.is_pinned,
+            archived_at=project.archived_at,
             created_at=project.created_at,
             updated_at=project.updated_at,
             questions=[
@@ -190,6 +247,7 @@ class ResearchService:
         user_id: UUID,
     ) -> tuple[ResearchProject, ResearchJob]:
         project = await self.get_research(db, research_id, user_id=user_id)
+        await self.permissions.require_run_research(db, project, user_id)
         job = await self.job_service.enqueue_research_job(db, project)
         await db.refresh(project)
         return project, job
@@ -217,6 +275,14 @@ class ResearchService:
         await self._persist_workflow_results(db, project, state)
         await self._run_quality_evaluation(db, project.id)
         await db.refresh(project)
+        if project.final_report:
+            await self.version_service.create_version_from_report(
+                db,
+                project,
+                project.final_report,
+                created_by=project.user_id,
+                change_reason="Initial workflow report",
+            )
         return project
 
     async def regenerate_report(
@@ -286,6 +352,54 @@ class ResearchService:
         await db.flush()
         await self._run_quality_evaluation(db, project.id)
         await db.refresh(project)
+        if project.final_report:
+            await self.version_service.create_version_from_report(
+                db,
+                project,
+                project.final_report,
+                created_by=user_id,
+                change_reason="Regenerated report",
+            )
+        return project
+
+    async def pin_research(
+        self, db: AsyncSession, research_id: UUID, user_id: UUID
+    ) -> ResearchProject:
+        project = await self.get_research(db, research_id, user_id=user_id)
+        if not await self.permissions.can_edit_research(db, project, user_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Cannot pin research")
+        project.is_pinned = True
+        await db.flush()
+        return project
+
+    async def unpin_research(
+        self, db: AsyncSession, research_id: UUID, user_id: UUID
+    ) -> ResearchProject:
+        project = await self.get_research(db, research_id, user_id=user_id)
+        if not await self.permissions.can_edit_research(db, project, user_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Cannot unpin research")
+        project.is_pinned = False
+        await db.flush()
+        return project
+
+    async def archive_research(
+        self, db: AsyncSession, research_id: UUID, user_id: UUID
+    ) -> ResearchProject:
+        project = await self.get_research(db, research_id, user_id=user_id)
+        if not await self.permissions.can_edit_research(db, project, user_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Cannot archive research")
+        project.archived_at = datetime.now(UTC)
+        await db.flush()
+        return project
+
+    async def restore_research(
+        self, db: AsyncSession, research_id: UUID, user_id: UUID
+    ) -> ResearchProject:
+        project = await self.get_research(db, research_id, user_id=user_id)
+        if not await self.permissions.can_edit_research(db, project, user_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Cannot restore research")
+        project.archived_at = None
+        await db.flush()
         return project
 
     async def get_quality_evaluation(

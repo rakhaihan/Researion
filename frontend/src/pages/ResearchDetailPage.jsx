@@ -11,6 +11,9 @@ import WorkflowStepper from "../components/workflow/WorkflowStepper";
 import ReportViewer from "../components/research/ReportViewer";
 import SourcesPanel from "../components/research/SourcesPanel";
 import QualityScoreCard from "../components/research/QualityScoreCard";
+import ShareModal from "../components/research/ShareModal";
+import VersionsPanel from "../components/research/VersionsPanel";
+import CommentsPanel from "../components/research/CommentsPanel";
 import { useResearchProgress } from "../hooks/useResearchProgress";
 import { api } from "../services/api";
 import { getStageDescription } from "../utils/workflowSteps";
@@ -26,6 +29,8 @@ export default function ResearchDetailPage() {
   const [highlightCitation, setHighlightCitation] = useState(null);
   const [debugOpen, setDebugOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("report");
 
   const { progress, transport, startPolling, fetchProgress, isActive } = useResearchProgress(
     id,
@@ -147,6 +152,11 @@ export default function ResearchDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-3">
+          {project.has_report && (
+            <Button variant="secondary" onClick={() => setShareOpen(true)}>
+              Share
+            </Button>
+          )}
           {canRun && (
             <Button onClick={handleRun} disabled={submitting}>
               {submitting ? "Starting workflow…" : "Run multi-agent workflow"}
@@ -242,7 +252,35 @@ export default function ResearchDetailPage() {
         )}
       </Card>
 
-      {markdownContent && (
+      <Card>
+        <div className="mb-4 flex gap-2 border-b border-slate-200">
+          {["report", "versions", "comments"].map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`border-b-2 px-3 py-2 text-sm font-medium capitalize ${
+                activeTab === tab
+                  ? "border-brand-600 text-brand-700"
+                  : "border-transparent text-slate-500"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+        {activeTab === "versions" && (
+          <VersionsPanel researchId={id} onRestored={loadProject} />
+        )}
+        {activeTab === "comments" && (
+          <CommentsPanel researchId={id} anchorRef={highlightCitation} />
+        )}
+        {activeTab === "report" && !markdownContent && (
+          <p className="text-sm text-slate-500">Report will appear after workflow completes.</p>
+        )}
+      </Card>
+
+      {activeTab === "report" && markdownContent && (
         <ReportViewer
           researchId={id}
           markdownContent={markdownContent}
@@ -269,6 +307,8 @@ export default function ResearchDetailPage() {
           onHighlight={setHighlightCitation}
         />
       </Card>
+
+      <ShareModal researchId={id} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }

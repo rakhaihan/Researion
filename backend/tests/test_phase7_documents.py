@@ -331,6 +331,7 @@ async def test_create_research_documents_only_validates_processed():
     user_id = uuid4()
     doc_id = uuid4()
     service = ResearchService()
+    service.workspace_service.get_default_workspace_id = AsyncMock(return_value=uuid4())
     service.document_service.validate_documents_for_research = AsyncMock()
 
     db = AsyncMock()

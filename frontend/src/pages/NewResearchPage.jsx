@@ -7,6 +7,7 @@ import Select from "../components/ui/Select";
 import Alert from "../components/ui/Alert";
 import PageHeader from "../components/ui/PageHeader";
 import { api } from "../services/api";
+import { useWorkspace } from "../contexts/WorkspaceContext";
 import {
   DEPTH_OPTIONS,
   RESEARCH_TYPES,
@@ -17,6 +18,7 @@ import { SOURCE_MODES, validateResearchSource } from "../utils/researchSourceCon
 
 export default function NewResearchPage() {
   const navigate = useNavigate();
+  const { activeWorkspaceId } = useWorkspace();
   const [topic, setTopic] = useState("");
   const [researchType, setResearchType] = useState("");
   const [depth, setDepth] = useState("");
@@ -89,6 +91,9 @@ export default function NewResearchPage() {
       };
       if (needsDocuments) {
         body.document_ids = selectedDocumentIds;
+      }
+      if (activeWorkspaceId) {
+        body.workspace_id = activeWorkspaceId;
       }
       const project = await api.createResearch(body);
       navigate(`/research/${project.id}`);

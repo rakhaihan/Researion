@@ -44,12 +44,18 @@ class UserService:
         db.add(user)
         await db.flush()
         await db.refresh(user)
+        from app.services.workspace_service import WorkspaceService
+
+        await WorkspaceService().ensure_default_workspace(db, user)
         return user
 
     async def ensure_dev_user(self, db: AsyncSession, settings: Settings | None = None) -> User:
         settings = settings or get_settings()
         user = await self.get_by_email(db, settings.dev_user_email)
         if user is not None:
+            from app.services.workspace_service import WorkspaceService
+
+            await WorkspaceService().ensure_default_workspace(db, user)
             return user
         return await self.create_user(
             db,

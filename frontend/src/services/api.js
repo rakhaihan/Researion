@@ -57,7 +57,16 @@ export const api = {
   me: () => request("/auth/me"),
   createResearch: (payload) =>
     request("/research", { method: "POST", body: JSON.stringify(payload) }),
-  listResearch: () => request("/research"),
+  listResearch: (params = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        qs.set(key, String(value));
+      }
+    });
+    const query = qs.toString();
+    return request(`/research${query ? `?${query}` : ""}`);
+  },
   getResearch: (id) => request(`/research/${id}`),
   runResearch: (id) => request(`/research/${id}/run`, { method: "POST" }),
   getProgress: (id) => request(`/research/${id}/progress`),
@@ -70,7 +79,57 @@ export const api = {
   getDocument: (id) => request(`/documents/${id}`),
   getDocumentStatus: (id) => request(`/documents/${id}/status`),
   deleteDocument: (id) => request(`/documents/${id}`, { method: "DELETE" }),
+  listWorkspaces: () => request("/workspaces"),
+  getWorkspace: (id) => request(`/workspaces/${id}`),
+  createWorkspace: (payload) =>
+    request("/workspaces", { method: "POST", body: JSON.stringify(payload) }),
+  updateWorkspace: (id, payload) =>
+    request(`/workspaces/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteWorkspace: (id) => request(`/workspaces/${id}`, { method: "DELETE" }),
+  listWorkspaceMembers: (id) => request(`/workspaces/${id}/members`),
+  addWorkspaceMember: (id, payload) =>
+    request(`/workspaces/${id}/members`, { method: "POST", body: JSON.stringify(payload) }),
+  updateWorkspaceMember: (workspaceId, memberId, payload) =>
+    request(`/workspaces/${workspaceId}/members/${memberId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  removeWorkspaceMember: (workspaceId, memberId) =>
+    request(`/workspaces/${workspaceId}/members/${memberId}`, { method: "DELETE" }),
+  pinResearch: (id) => request(`/research/${id}/pin`, { method: "POST" }),
+  unpinResearch: (id) => request(`/research/${id}/unpin`, { method: "POST" }),
+  archiveResearch: (id) => request(`/research/${id}/archive`, { method: "POST" }),
+  restoreResearch: (id) => request(`/research/${id}/restore`, { method: "POST" }),
+  listShareLinks: (id) => request(`/research/${id}/share`),
+  createShareLink: (id, payload) =>
+    request(`/research/${id}/share`, { method: "POST", body: JSON.stringify(payload) }),
+  revokeShareLink: (researchId, shareId) =>
+    request(`/research/${researchId}/share/${shareId}`, { method: "DELETE" }),
+  listVersions: (id) => request(`/research/${id}/versions`),
+  getVersion: (researchId, versionId) =>
+    request(`/research/${researchId}/versions/${versionId}`),
+  compareVersions: (researchId, fromVersion, toVersion) =>
+    request(
+      `/research/${researchId}/versions/compare?from_version=${fromVersion}&to_version=${toVersion}`,
+    ),
+  restoreVersion: (researchId, versionId) =>
+    request(`/research/${researchId}/versions/${versionId}/restore`, { method: "POST" }),
+  listComments: (id) => request(`/research/${id}/comments`),
+  createComment: (id, payload) =>
+    request(`/research/${id}/comments`, { method: "POST", body: JSON.stringify(payload) }),
+  updateComment: (researchId, commentId, payload) =>
+    request(`/research/${researchId}/comments/${commentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteComment: (researchId, commentId) =>
+    request(`/research/${researchId}/comments/${commentId}`, { method: "DELETE" }),
+  getPublicReport: (token) => request(`/public/reports/${token}`),
 };
+
+export function getPublicApiBase() {
+  return API_BASE;
+}
 
 export async function uploadDocument(file) {
   const token = getToken();

@@ -18,6 +18,7 @@ Multi-Agent Research Assistant — an AI-powered platform that automates researc
 - Source credibility badges, filters, and citation navigation
 - **JWT authentication** with per-user research isolation (Phase 3)
 - **Knowledge Base** — upload PDF/TXT/Markdown, chunking, embeddings, RAG retrieval (Phase 7)
+- **Workspaces & collaboration** — roles, share links, report versions, comments (Phase 8)
 - **Research source modes** — `web_only`, `documents_only`, or `hybrid` (web + documents)
 - **Alembic migrations** for production-ready schema management
 - Docker Compose deployment
@@ -571,6 +572,89 @@ curl http://localhost:8000/api/documents/{id}/status -H "Authorization: Bearer $
 1. Ensure at least one document is `processed`
 2. Create research with `research_source_mode: "documents_only"` and `document_ids`
 3. Run workflow — sources should use `document://…` URLs, no external web URLs from Tavily
+
+## Collaboration & Workspaces (Phase 8)
+
+### Workspaces
+
+- Each user gets a **default workspace** on register (backfilled for existing users via migration `005_workspace_collab`).
+- Create additional workspaces, invite members by email, and assign roles.
+
+| Role | Permissions |
+|------|-------------|
+| **owner** | Full control, delete workspace, manage members |
+| **admin** | Invite/remove editor/viewer, edit workspace, manage research |
+| **editor** | Create, edit, run research |
+| **viewer** | Read research, comment |
+
+### Workspace API
+
+| Method | Path |
+|--------|------|
+| POST | `/api/workspaces` |
+| GET | `/api/workspaces` |
+| GET/PATCH/DELETE | `/api/workspaces/{id}` |
+| GET/POST | `/api/workspaces/{id}/members` |
+| PATCH/DELETE | `/api/workspaces/{id}/members/{member_id}` |
+
+### Research organization
+
+`GET /api/research` query params: `workspace_id`, `status`, `research_type`, `source_mode`, `pinned`, `archived`, `q`, `sort` (`latest` \| `oldest` \| `title`).
+
+| POST | Path |
+|------|------|
+| POST | `/api/research/{id}/pin` |
+| POST | `/api/research/{id}/unpin` |
+| POST | `/api/research/{id}/archive` |
+| POST | `/api/research/{id}/restore` |
+
+Archived projects are hidden unless `archived=true`. Pinned projects sort to the top.
+
+### Share report (public link)
+
+| Method | Path |
+|--------|------|
+| POST | `/api/research/{id}/share` |
+| GET | `/api/research/{id}/share` |
+| DELETE | `/api/research/{id}/share/{share_id}` |
+| GET | `/api/public/reports/{token}` (no auth) |
+| GET | `/api/public/reports/{token}/export/markdown` |
+| GET | `/api/public/reports/{token}/export/pdf` |
+
+Public responses exclude owner email, job IDs, and internal storage paths. Tokens are 32-byte URL-safe secrets. Revoked/expired links return 404.
+
+Frontend public route: `/public/reports/:token`
+
+### Report versioning
+
+Every completed workflow and every **regenerate-report** creates a `ReportVersion`. Restore creates a new version with reason `Restored from version X`.
+
+| Method | Path |
+|--------|------|
+| GET | `/api/research/{id}/versions` |
+| GET | `/api/research/{id}/versions/{version_id}` |
+| GET | `/api/research/{id}/versions/compare?from_version=1&to_version=2` |
+| POST | `/api/research/{id}/versions/{version_id}/restore` |
+
+### Comments
+
+| Method | Path |
+|--------|------|
+| GET/POST | `/api/research/{id}/comments` |
+| PATCH/DELETE | `/api/research/{id}/comments/{comment_id}` |
+
+Supports `parent_id` replies and optional anchors (`general`, `report`, `source` + `anchor_ref` e.g. citation key).
+
+### Example flow
+
+1. Register → default workspace created
+2. **Workspace Settings** → invite teammate as **editor**
+3. Select workspace in sidebar → **New Research**
+4. Complete report → **Share** → copy public link
+5. **Regenerate report** → new version in **Versions** tab
+6. Compare v1 vs v2, add comments on sources
+
+Run migration: `alembic upgrade head` (revision `005_workspace_collab`).
 
 ## Notes
 

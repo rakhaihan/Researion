@@ -43,6 +43,7 @@ class ResearchCreate(BaseModel):
     depth: ResearchDepth = ResearchDepth.STANDARD
     research_source_mode: ResearchSourceMode = ResearchSourceMode.WEB_ONLY
     document_ids: list[UUID] = Field(default_factory=list)
+    workspace_id: UUID | None = None
 
 
 class ResearchQuestionResponse(BaseModel):
@@ -120,6 +121,9 @@ class ResearchSummaryResponse(BaseModel):
     status: ResearchStatus
     research_source_mode: ResearchSourceMode = ResearchSourceMode.WEB_ONLY
     document_ids: list[UUID] = Field(default_factory=list)
+    workspace_id: UUID | None = None
+    is_pinned: bool = False
+    archived_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

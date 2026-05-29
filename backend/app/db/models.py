@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,6 +52,106 @@ class User(Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    owned_workspaces: Mapped[list["Workspace"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        foreign_keys="Workspace.owner_id",
+    )
+    workspace_memberships: Mapped[list["WorkspaceMember"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    comments: Mapped[list["ResearchComment"]] = relationship(
+        back_populates="author",
+        cascade="all, delete-orphan",
+    )
+
+
+class WorkspaceRole(enum.StrEnum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    EDITOR = "editor"
+    VIEWER = "viewer"
+
+
+class ShareVisibility(enum.StrEnum):
+    PRIVATE = "private"
+    PUBLIC = "public"
+
+
+class CommentAnchorType(enum.StrEnum):
+    REPORT = "report"
+    SOURCE = "source"
+    GENERAL = "general"
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    owner: Mapped["User"] = relationship(
+        back_populates="owned_workspaces",
+        foreign_keys=[owner_id],
+    )
+    members: Mapped[list["WorkspaceMember"]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+    )
+    research_projects: Mapped[list["ResearchProject"]] = relationship(
+        back_populates="workspace",
+    )
+
+
+class WorkspaceMember(Base):
+    __tablename__ = "workspace_members"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[WorkspaceRole] = mapped_column(
+        Enum(WorkspaceRole, name="workspace_role_enum"),
+        nullable=False,
+        default=WorkspaceRole.VIEWER,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    workspace: Mapped["Workspace"] = relationship(back_populates="members")
+    user: Mapped["User"] = relationship(back_populates="workspace_memberships")
 
 
 class ResearchSourceMode(enum.StrEnum):
@@ -125,6 +225,14 @@ class ResearchProject(Base):
         default=ResearchSourceMode.WEB_ONLY,
     )
     document_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -136,6 +244,21 @@ class ResearchProject(Base):
     )
 
     owner: Mapped["User"] = relationship(back_populates="research_projects")
+    workspace: Mapped["Workspace | None"] = relationship(back_populates="research_projects")
+    shared_links: Mapped[list["SharedReportLink"]] = relationship(
+        back_populates="research",
+        cascade="all, delete-orphan",
+    )
+    report_versions: Mapped[list["ReportVersion"]] = relationship(
+        back_populates="research",
+        cascade="all, delete-orphan",
+        order_by="ReportVersion.version_number.desc()",
+    )
+    comments: Mapped[list["ResearchComment"]] = relationship(
+        back_populates="research",
+        cascade="all, delete-orphan",
+        order_by="ResearchComment.created_at",
+    )
     quality_evaluation: Mapped["ResearchQualityEvaluation | None"] = relationship(
         back_populates="research",
         cascade="all, delete-orphan",
@@ -344,6 +467,126 @@ class FinalReport(Base):
     analysis_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     research: Mapped["ResearchProject"] = relationship(back_populates="final_report")
+
+
+class ReportVersion(Base):
+    __tablename__ = "report_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    research_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    markdown_content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    executive_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    detailed_analysis: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    key_findings: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    risks: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    conclusion: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    quality_status: Mapped[QualityStatus | None] = mapped_column(
+        Enum(QualityStatus, name="quality_status_enum"),
+        nullable=True,
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    change_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    research: Mapped["ResearchProject"] = relationship(back_populates="report_versions")
+
+
+class SharedReportLink(Base):
+    __tablename__ = "shared_report_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    research_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    token: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    visibility: Mapped[ShareVisibility] = mapped_column(
+        Enum(ShareVisibility, name="share_visibility_enum"),
+        nullable=False,
+        default=ShareVisibility.PUBLIC,
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    allow_download: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    research: Mapped["ResearchProject"] = relationship(back_populates="shared_links")
+
+
+class ResearchComment(Base):
+    __tablename__ = "research_comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    research_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_comments.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    anchor_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    anchor_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    research: Mapped["ResearchProject"] = relationship(back_populates="comments")
+    author: Mapped["User"] = relationship(back_populates="comments")
+    parent: Mapped["ResearchComment | None"] = relationship(
+        remote_side="ResearchComment.id",
+        back_populates="replies",
+    )
+    replies: Mapped[list["ResearchComment"]] = relationship(
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
 
 
 class ResearchQualityEvaluation(Base):
