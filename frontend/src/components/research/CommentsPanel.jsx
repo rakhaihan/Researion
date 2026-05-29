@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Button from "../ui/Button";
 import Alert from "../ui/Alert";
 import { api } from "../../services/api";
@@ -8,18 +8,18 @@ export default function CommentsPanel({ researchId, anchorRef }) {
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const data = await api.listComments(researchId);
       setComments(data);
     } catch {
       setComments([]);
     }
-  }
+  }, [researchId]);
 
   useEffect(() => {
     load();
-  }, [researchId]);
+  }, [load]);
 
   async function handleSubmit(event) {
     event.preventDefault();

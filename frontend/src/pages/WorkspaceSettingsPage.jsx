@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
@@ -15,18 +15,18 @@ export default function WorkspaceSettingsPage() {
   const [inviteRole, setInviteRole] = useState("viewer");
   const [error, setError] = useState("");
 
-  async function load() {
+  const load = useCallback(async () => {
     const [ws, mems] = await Promise.all([
       api.getWorkspace(id),
       api.listWorkspaceMembers(id),
     ]);
     setWorkspace(ws);
     setMembers(mems);
-  }
+  }, [id]);
 
   useEffect(() => {
     load().catch((err) => setError(err.message));
-  }, [id]);
+  }, [load]);
 
   async function handleInvite(event) {
     event.preventDefault();
