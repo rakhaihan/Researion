@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -6,10 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
     FinalReport,
-    QualityStatus as DbQualityStatus,
     ResearchProject,
     ResearchQualityEvaluation,
     SourceResult,
+)
+from app.db.models import (
+    QualityStatus as DbQualityStatus,
 )
 from app.schemas.quality import (
     CitationValidationResult,

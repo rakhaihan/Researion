@@ -1,17 +1,17 @@
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from jose import jwt
 
+from app.api.deps import get_db, resolve_current_user
 from app.core.config import get_settings
 from app.core.jwt import create_access_token
 from app.core.password import hash_password
-from app.db.models import ResearchProject, ResearchStatus, ResearchType, ResearchDepth, User
+from app.db.models import ResearchDepth, ResearchProject, ResearchStatus, ResearchType, User
 from app.main import app
-from app.api.deps import get_db, resolve_current_user
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 
@@ -136,14 +136,15 @@ async def test_research_without_token_fails_when_jwt_mode(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_user_cannot_access_other_users_research():
-    from app.services.research_service import ResearchService
     from fastapi import HTTPException
+
+    from app.services.research_service import ResearchService
 
     user_a = uuid4()
     user_b = uuid4()
     research_id = uuid4()
 
-    project = ResearchProject(
+    ResearchProject(
         id=research_id,
         user_id=user_b,
         topic="Secret",
@@ -165,8 +166,10 @@ async def test_user_cannot_access_other_users_research():
 
 @pytest.mark.asyncio
 async def test_create_research_assigns_current_user():
+    from app.schemas.research import ResearchCreate
+    from app.schemas.research import ResearchDepth as RD
+    from app.schemas.research import ResearchType as RT
     from app.services.research_service import ResearchService
-    from app.schemas.research import ResearchCreate, ResearchType as RT, ResearchDepth as RD
 
     user_id = uuid4()
     db = AsyncMock()

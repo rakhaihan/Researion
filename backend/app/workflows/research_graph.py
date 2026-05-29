@@ -13,7 +13,7 @@ from app.agents.source_evaluator_agent import SourceEvaluatorAgent
 from app.agents.summarizer_agent import SummarizerAgent
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.db.models import ResearchStep, STEP_PROGRESS
+from app.db.models import STEP_PROGRESS, ResearchStep
 
 logger = get_logger(__name__)
 

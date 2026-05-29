@@ -1,6 +1,5 @@
 import hashlib
 import math
-from typing import Literal
 
 import httpx
 
@@ -56,7 +55,7 @@ class EmbeddingService:
     def cosine_similarity(a: list[float], b: list[float]) -> float:
         if len(a) != len(b) or not a:
             return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
+        dot = sum(x * y for x, y in zip(a, b, strict=False))
         norm_a = math.sqrt(sum(x * x for x in a)) or 1.0
         norm_b = math.sqrt(sum(x * x for x in b)) or 1.0
         return dot / (norm_a * norm_b)

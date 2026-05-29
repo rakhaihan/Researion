@@ -50,7 +50,8 @@ class DocumentService:
                 detail=f"Unsupported file type. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
             )
 
-        content_type = file.content_type or mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+        guessed_type = mimetypes.guess_type(safe_name)[0]
+        content_type = file.content_type or guessed_type or "application/octet-stream"
         if content_type not in ALLOWED_MIME and suffix not in ALLOWED_EXTENSIONS:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Unsupported MIME type")
 
@@ -171,7 +172,10 @@ class DocumentService:
         if not_processed:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=f"Documents must be processed before use in research: {', '.join(not_processed)}",
+                detail=(
+                    "Documents must be processed before use in research: "
+                    f"{', '.join(not_processed)}"
+                ),
             )
 
     async def process_document(self, db: AsyncSession, document_id: UUID) -> None:
@@ -201,7 +205,7 @@ class DocumentService:
             texts = [spec["content"] for spec in chunk_specs]
             embeddings = await self.embedding_service.embed_texts(texts)
 
-            for spec, embedding in zip(chunk_specs, embeddings):
+            for spec, embedding in zip(chunk_specs, embeddings, strict=False):
                 chunk = DocumentChunk(
                     document_id=document.id,
                     user_id=document.user_id,

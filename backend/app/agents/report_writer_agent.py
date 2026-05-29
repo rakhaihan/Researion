@@ -106,7 +106,8 @@ class ReportWriterAgent(BaseAgent):
                 f"Multi-agent workflow with {research_type} focus, "
                 "live search with citation tracking."
             ),
-            key_findings=analysis.get("patterns", []) or ["[S1] Insufficient evidence for detailed findings."],
+            key_findings=analysis.get("patterns", [])
+            or ["[S1] Insufficient evidence for detailed findings."],
             detailed_analysis=analysis.get("analysis", "Insufficient evidence."),
             risks_and_limitations=critique.get("weaknesses", []),
             opposing_views=critique.get("missing_perspectives", []),

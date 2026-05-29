@@ -10,7 +10,8 @@ from fastapi import HTTPException, UploadFile
 from app.agents.search_agent import SearchAgent
 from app.core.config import Settings
 from app.db.models import Document, DocumentChunk, DocumentStatus, ResearchSourceMode
-from app.schemas.documents import RAGChunkResult, ResearchSourceMode as ResearchSourceModeSchema
+from app.schemas.documents import RAGChunkResult
+from app.schemas.documents import ResearchSourceMode as ResearchSourceModeSchema
 from app.schemas.research import ResearchCreate, ResearchDepth, ResearchType
 from app.services.document_processing_service import DocumentProcessingService
 from app.services.document_service import DocumentService

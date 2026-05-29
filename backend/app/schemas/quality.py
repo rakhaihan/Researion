@@ -1,11 +1,11 @@
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class QualityStatus(str, Enum):
+class QualityStatus(StrEnum):
     PASSED = "passed"
     WARNING = "warning"
     FAILED = "failed"

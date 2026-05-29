@@ -7,12 +7,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.logging import get_logger
 from app.agents.critique_agent import CritiqueAgent
 from app.agents.report_writer_agent import ReportWriterAgent
+from app.core.logging import get_logger
 from app.db.models import (
     FinalReport,
-    QualityStatus,
     ResearchDepth,
     ResearchJob,
     ResearchProject,
@@ -25,17 +24,16 @@ from app.db.models import (
     SourceSummary,
 )
 from app.schemas.documents import ResearchSourceMode as ResearchSourceModeSchema
-from app.services.document_service import DocumentService
 from app.schemas.quality import ResearchQualityEvaluationResponse
 from app.schemas.research import (
     FinalReportBriefResponse,
     ResearchCreate,
     ResearchDetailResponse,
     ResearchQuestionResponse,
-    ResearchSummaryResponse,
     SourceResultResponse,
     SourceSummaryResponse,
 )
+from app.services.document_service import DocumentService
 from app.services.job_service import JobService
 from app.services.pdf_service import PDFService
 from app.services.quality_evaluation_service import QualityEvaluationService
@@ -356,7 +354,9 @@ class ResearchService:
                 ResearchQualityEvaluation.research_id == research_id
             )
         )
-        await db.execute(delete(ResearchQuestion).where(ResearchQuestion.research_id == research_id))
+        await db.execute(
+            delete(ResearchQuestion).where(ResearchQuestion.research_id == research_id)
+        )
         await db.flush()
 
     async def _persist_workflow_results(

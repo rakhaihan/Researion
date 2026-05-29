@@ -5,7 +5,6 @@ import pytest
 
 from app.core.config import Settings
 from app.services.search_service import (
-    MockSearchProvider,
     SearchProviderError,
     SearchService,
     TavilySearchProvider,

@@ -1,18 +1,18 @@
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
-class DocumentStatus(str, Enum):
+class DocumentStatus(StrEnum):
     UPLOADED = "uploaded"
     PROCESSING = "processing"
     PROCESSED = "processed"
     FAILED = "failed"
 
 
-class ResearchSourceMode(str, Enum):
+class ResearchSourceMode(StrEnum):
     WEB_ONLY = "web_only"
     DOCUMENTS_ONLY = "documents_only"
     HYBRID = "hybrid"

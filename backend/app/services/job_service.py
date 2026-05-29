@@ -8,12 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.core.redis import get_arq_pool
 from app.db.models import (
+    STEP_PROGRESS,
     JobStatus,
     ResearchJob,
     ResearchProject,
     ResearchStatus,
     ResearchStep,
-    STEP_PROGRESS,
 )
 from app.schemas.job import STEP_LABELS, ResearchProgressResponse
 

@@ -30,7 +30,11 @@ class ClaimCheckerService:
     def __init__(self) -> None:
         self._risk_re = re.compile("|".join(HIGH_RISK_PATTERNS), re.IGNORECASE)
 
-    def check(self, key_findings: list[str] | None, markdown_content: str | None = None) -> ClaimCheckResult:
+    def check(
+        self,
+        key_findings: list[str] | None,
+        markdown_content: str | None = None,
+    ) -> ClaimCheckResult:
         warnings: list[str] = []
         uncited: list[str] = []
 

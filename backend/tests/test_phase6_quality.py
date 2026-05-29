@@ -1,13 +1,18 @@
+from uuid import uuid4
+
 import pytest
 
-from app.schemas.agent_outputs import AnalystOutput, PlannerOutput, ResearchQuestionPlan, ReportWriterOutput
+from app.db.models import FinalReport, SourceResult
+from app.schemas.agent_outputs import (
+    AnalystOutput,
+    PlannerOutput,
+    ResearchQuestionPlan,
+)
+from app.schemas.quality import QualityStatus
 from app.services.citation_validation_service import CitationValidationService
 from app.services.claim_checker_service import ClaimCheckerService
 from app.services.llm_service import LLMService
 from app.services.quality_evaluation_service import QualityEvaluationService
-from app.schemas.quality import QualityStatus
-from app.db.models import FinalReport, SourceResult
-from uuid import uuid4
 
 
 def test_planner_output_schema():
@@ -32,7 +37,12 @@ def test_analyst_output_confidence_enum():
 
 
 def test_llm_parse_json_extracts_object():
-    raw = 'Here is data {"analysis": "test", "patterns": [], "supporting_evidence": [], "opportunities": [], "risks": [], "conflicting_signals": [], "confidence_level": "low"}'
+    payload = (
+        '{"analysis": "test", "patterns": [], "supporting_evidence": [], '
+        '"opportunities": [], "risks": [], "conflicting_signals": [], '
+        '"confidence_level": "low"}'
+    )
+    raw = f"Here is data {payload}"
     parsed = LLMService._parse_json(raw, {})
     assert parsed.get("analysis") == "test"
 

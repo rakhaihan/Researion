@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 
 
-class ResearchType(str, enum.Enum):
+class ResearchType(enum.StrEnum):
     MARKET_RESEARCH = "Market Research"
     STOCK_CRYPTO = "Stock/Crypto Research"
     ACADEMIC = "Academic Research"
@@ -17,7 +17,7 @@ class ResearchType(str, enum.Enum):
     TECHNOLOGY_TREND = "Technology Trend Analysis"
 
 
-class ResearchDepth(str, enum.Enum):
+class ResearchDepth(enum.StrEnum):
     QUICK = "quick"
     STANDARD = "standard"
     DEEP = "deep"
@@ -54,26 +54,26 @@ class User(Base):
     )
 
 
-class ResearchSourceMode(str, enum.Enum):
+class ResearchSourceMode(enum.StrEnum):
     WEB_ONLY = "web_only"
     DOCUMENTS_ONLY = "documents_only"
     HYBRID = "hybrid"
 
 
-class DocumentStatus(str, enum.Enum):
+class DocumentStatus(enum.StrEnum):
     UPLOADED = "uploaded"
     PROCESSING = "processing"
     PROCESSED = "processed"
     FAILED = "failed"
 
 
-class QualityStatus(str, enum.Enum):
+class QualityStatus(enum.StrEnum):
     PASSED = "passed"
     WARNING = "warning"
     FAILED = "failed"
 
 
-class ResearchStatus(str, enum.Enum):
+class ResearchStatus(enum.StrEnum):
     PENDING = "pending"
     QUEUED = "queued"
     PLANNING = "planning"
@@ -162,14 +162,14 @@ class ResearchProject(Base):
     )
 
 
-class JobStatus(str, enum.Enum):
+class JobStatus(enum.StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
-class ResearchStep(str, enum.Enum):
+class ResearchStep(enum.StrEnum):
     PLANNING = "planning"
     SEARCHING = "searching"
     EVALUATING_SOURCES = "evaluating_sources"

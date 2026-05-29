@@ -32,13 +32,18 @@ class CitationValidationService:
                 if key:
                     report_source_keys.add(key)
 
-        missing_in_report = valid_citation_keys - report_source_keys if report_source_keys else set()
+        if report_source_keys:
+            missing_in_report = valid_citation_keys - report_source_keys
+        else:
+            missing_in_report = set()
         warnings: list[str] = []
         recommendations: list[str] = []
 
         if invalid:
             warnings.append(f"Fictitious or unknown citations detected: {', '.join(invalid)}")
-            recommendations.append("Remove or replace invalid citation keys with catalog sources only.")
+            recommendations.append(
+                "Remove or replace invalid citation keys with catalog sources only."
+            )
 
         findings = key_findings or []
         cited_findings = sum(1 for f in findings if CITATION_PATTERN.search(str(f)))
@@ -49,14 +54,17 @@ class CitationValidationService:
             )
             recommendations.append("Add [Sx] citations to key findings lacking source support.")
 
-        domain_counts = Counter()
         single_source_warning = False
         if cited_keys:
             citation_usage = Counter(CITATION_PATTERN.findall(full_text))
-            if citation_usage and max(citation_usage.values()) / max(sum(citation_usage.values()), 1) > 0.7:
+            total_usage = sum(citation_usage.values())
+            dominant_share = max(citation_usage.values()) / max(total_usage, 1)
+            if citation_usage and dominant_share > 0.7:
                 single_source_warning = True
                 warnings.append("Report relies heavily on a single citation source.")
-                recommendations.append("Incorporate additional sources to reduce single-source dependency.")
+                recommendations.append(
+                    "Incorporate additional sources to reduce single-source dependency."
+                )
 
         conclusion_citations = set(CITATION_PATTERN.findall(conclusion or ""))
         if conclusion and conclusion.strip() and not conclusion_citations:

@@ -8,7 +8,10 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.deps import get_research_service, resolve_current_user
 from app.core.password import hash_password
-from app.db.models import JobStatus, ResearchJob, ResearchProject, ResearchStatus, ResearchDepth, ResearchType, User
+from app.db.models import (
+    JobStatus,
+    User,
+)
 from app.main import app
 from app.schemas.job import ResearchProgressResponse, ResearchStep
 

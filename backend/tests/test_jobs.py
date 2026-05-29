@@ -4,7 +4,14 @@ from uuid import uuid4
 
 import pytest
 
-from app.db.models import JobStatus, ResearchJob, ResearchProject, ResearchStatus, ResearchType, ResearchDepth
+from app.db.models import (
+    JobStatus,
+    ResearchDepth,
+    ResearchJob,
+    ResearchProject,
+    ResearchStatus,
+    ResearchType,
+)
 from app.schemas.job import JobStatus as SchemaJobStatus
 from app.services.job_service import JobService
 

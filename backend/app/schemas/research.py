@@ -1,5 +1,5 @@
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
@@ -9,7 +9,7 @@ from app.schemas.quality import QualityStatus, ResearchQualityEvaluationResponse
 from app.utils.url_utils import extract_domain
 
 
-class ResearchType(str, Enum):
+class ResearchType(StrEnum):
     MARKET_RESEARCH = "Market Research"
     STOCK_CRYPTO = "Stock/Crypto Research"
     ACADEMIC = "Academic Research"
@@ -17,13 +17,13 @@ class ResearchType(str, Enum):
     TECHNOLOGY_TREND = "Technology Trend Analysis"
 
 
-class ResearchDepth(str, Enum):
+class ResearchDepth(StrEnum):
     QUICK = "quick"
     STANDARD = "standard"
     DEEP = "deep"
 
 
-class ResearchStatus(str, Enum):
+class ResearchStatus(StrEnum):
     PENDING = "pending"
     QUEUED = "queued"
     PLANNING = "planning"

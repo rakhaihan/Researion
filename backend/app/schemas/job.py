@@ -1,18 +1,18 @@
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
-class ResearchStep(str, Enum):
+class ResearchStep(StrEnum):
     PLANNING = "planning"
     SEARCHING = "searching"
     EVALUATING_SOURCES = "evaluating_sources"
