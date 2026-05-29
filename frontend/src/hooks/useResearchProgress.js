@@ -40,7 +40,7 @@ export function useResearchProgress(researchId, projectStatus) {
 
   const stopPolling = useCallback(() => {
     setPolling(false);
-    if intervalRef.current) {
+    if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
