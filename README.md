@@ -17,6 +17,8 @@ Multi-Agent Research Assistant — an AI-powered platform that automates researc
 - **SSE progress stream** with polling fallback (~2s) and tab-visibility aware updates
 - Source credibility badges, filters, and citation navigation
 - **JWT authentication** with per-user research isolation (Phase 3)
+- **Knowledge Base** — upload PDF/TXT/Markdown, chunking, embeddings, RAG retrieval (Phase 7)
+- **Research source modes** — `web_only`, `documents_only`, or `hybrid` (web + documents)
 - **Alembic migrations** for production-ready schema management
 - Docker Compose deployment
 
@@ -484,6 +486,91 @@ Researion/
 ├── docker-compose.yml
 └── README.md
 ```
+
+## Knowledge Base (Phase 7)
+
+Upload personal documents and use them as research sources alongside (or instead of) live web search.
+
+### Supported files
+
+- PDF, TXT, Markdown (`.md`)
+- Default max size: **10MB** per file
+- Files stored locally at `backend/storage/documents/{user_id}/{document_id}/`
+
+### Environment
+
+```env
+DOCUMENT_STORAGE_DIR=storage/documents
+MAX_DOCUMENT_SIZE_MB=10
+DOCUMENT_CHUNK_SIZE=1000
+DOCUMENT_CHUNK_OVERLAP=150
+EMBEDDING_PROVIDER=mock          # mock | openai
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+VECTOR_STORE=memory              # in-app cosine on JSONB embeddings (pgvector planned)
+RAG_TOP_K=5
+```
+
+| `EMBEDDING_PROVIDER` | Behavior |
+|------------------------|----------|
+| `mock` | Deterministic 64-dim vectors (stable tests, no API key) |
+| `openai` | Uses `OPENAI_API_KEY` when set; falls back to mock on error |
+
+**Vector store:** Phase 7 stores embeddings as **JSONB** on `document_chunks` and ranks with in-memory cosine similarity (`VECTOR_STORE=memory`). This avoids extra Postgres extensions in Docker. For production at scale, swap to **pgvector** or S3/MinIO object storage (documented for future migration).
+
+### Document API
+
+| Method | Path |
+|--------|------|
+| POST | `/api/documents/upload` |
+| GET | `/api/documents` |
+| GET | `/api/documents/{id}` |
+| GET | `/api/documents/{id}/status` |
+| DELETE | `/api/documents/{id}` |
+
+After upload, a Redis worker job extracts text → chunks → embeddings → `processed`.
+
+### Research with documents
+
+```json
+POST /api/research
+{
+  "topic": "Compare our internal brief with market news",
+  "research_type": "Market Research",
+  "depth": "standard",
+  "research_source_mode": "hybrid",
+  "document_ids": ["<uuid-of-processed-doc>"]
+}
+```
+
+| Mode | Behavior |
+|------|----------|
+| `web_only` | Tavily/mock search only (default) |
+| `documents_only` | RAG from selected processed documents; no Tavily |
+| `hybrid` | Tavily + RAG chunks; citations S1, S2, … |
+
+Document citations appear as `[Sx] filename.pdf, page N — internal document` in the report Sources section.
+
+### Example workflow
+
+1. Open **Knowledge Base** → upload a PDF
+2. Wait until status is **processed** (page polls every few seconds)
+3. **New Research** → choose **Hybrid** → select the document → run workflow
+4. Open report → Sources panel shows **Web** and **Document** badges
+
+### Manual test: upload
+
+```bash
+curl -X POST http://localhost:8000/api/documents/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@notes.txt"
+curl http://localhost:8000/api/documents/{id}/status -H "Authorization: Bearer $TOKEN"
+```
+
+### Manual test: documents_only research
+
+1. Ensure at least one document is `processed`
+2. Create research with `research_source_mode: "documents_only"` and `document_ids`
+3. Run workflow — sources should use `document://…` URLs, no external web URLs from Tavily
 
 ## Notes
 

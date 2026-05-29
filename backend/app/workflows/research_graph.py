@@ -1,5 +1,6 @@
 from collections.abc import Awaitable, Callable
 from typing import Any, TypedDict
+from uuid import UUID
 
 from langgraph.graph import END, StateGraph
 
@@ -23,6 +24,10 @@ class ResearchState(TypedDict, total=False):
     topic: str
     research_type: str
     depth: str
+    research_source_mode: str
+    document_ids: list[str]
+    user_id: str
+    db: Any
     status: str
     questions: list[dict[str, Any]]
     sources: list[dict[str, Any]]
@@ -75,12 +80,21 @@ class ResearchWorkflow:
         research_type: str,
         depth: str,
         on_progress: ProgressCallback | None = None,
+        *,
+        research_source_mode: str = "web_only",
+        document_ids: list[str] | None = None,
+        user_id: str | None = None,
+        db: Any = None,
     ) -> ResearchState:
         self._on_progress = on_progress
         initial_state: ResearchState = {
             "topic": topic,
             "research_type": research_type,
             "depth": depth,
+            "research_source_mode": research_source_mode,
+            "document_ids": document_ids or [],
+            "user_id": user_id or "",
+            "db": db,
             "status": "planning",
         }
         result = await self.graph.ainvoke(initial_state)
@@ -111,6 +125,10 @@ class ResearchWorkflow:
         sources = await self.search_agent.run(
             questions=state["questions"],
             topic=state["topic"],
+            research_source_mode=state.get("research_source_mode", "web_only"),
+            document_ids=state.get("document_ids"),
+            user_id=UUID(state["user_id"]) if state.get("user_id") else None,
+            db=state.get("db"),
         )
         return {"sources": sources, "status": "evaluating"}
 

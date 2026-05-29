@@ -48,6 +48,23 @@ class User(Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
+
+
+class ResearchSourceMode(str, enum.Enum):
+    WEB_ONLY = "web_only"
+    DOCUMENTS_ONLY = "documents_only"
+    HYBRID = "hybrid"
+
+
+class DocumentStatus(str, enum.Enum):
+    UPLOADED = "uploaded"
+    PROCESSING = "processing"
+    PROCESSED = "processed"
+    FAILED = "failed"
 
 
 class QualityStatus(str, enum.Enum):
@@ -102,6 +119,12 @@ class ResearchProject(Base):
         nullable=True,
     )
     quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    research_source_mode: Mapped[ResearchSourceMode] = mapped_column(
+        Enum(ResearchSourceMode, name="research_source_mode_enum"),
+        nullable=False,
+        default=ResearchSourceMode.WEB_ONLY,
+    )
+    document_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -251,6 +274,19 @@ class SourceResult(Base):
     credibility_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     published_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    chunk_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document_chunks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     raw_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -343,3 +379,78 @@ class ResearchQualityEvaluation(Base):
     )
 
     research: Mapped["ResearchProject"] = relationship(back_populates="quality_evaluation")
+
+
+class Document(Base):
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    status: Mapped[DocumentStatus] = mapped_column(
+        Enum(DocumentStatus, name="document_status_enum"),
+        nullable=False,
+        default=DocumentStatus.UPLOADED,
+    )
+    processing_step: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    owner: Mapped["User"] = relationship(back_populates="documents")
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="DocumentChunk.chunk_index",
+    )
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    section_title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    embedding_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    embedding: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    chunk_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    document: Mapped["Document"] = relationship(back_populates="chunks")

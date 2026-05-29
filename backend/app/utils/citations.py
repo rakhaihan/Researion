@@ -21,7 +21,13 @@ def build_sources_markdown_section(sources: list[dict[str, Any]]) -> list[str]:
         key = source.get("citation_key", "")
         title = source.get("title", "Untitled")
         url = source.get("url", "")
-        lines.append(f"[{key}] {title} — {url}")
+        if source.get("source_type") == "document" or str(url).startswith("document://"):
+            page = source.get("page_number")
+            page_suffix = f", page {page}" if page else ""
+            filename = source.get("original_filename") or title
+            lines.append(f"[{key}] {filename}{page_suffix} — internal document")
+        else:
+            lines.append(f"[{key}] {title} — {url}")
     return lines
 
 

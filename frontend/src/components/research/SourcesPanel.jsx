@@ -11,12 +11,21 @@ const FILTERS = [
 ];
 
 function extractDomain(url) {
+  if (!url || String(url).startsWith("document://")) return "";
   try {
     const host = new URL(url).hostname.toLowerCase();
     return host.startsWith("www.") ? host.slice(4) : host;
   } catch {
     return "";
   }
+}
+
+function isDocumentSource(source) {
+  return source.source_type === "document" || String(source.url || "").startsWith("document://");
+}
+
+function sourceTypeBadge(source) {
+  return isDocumentSource(source) ? "Document" : "Web";
 }
 
 function CredibilityBadge({ score, tier }) {
@@ -106,22 +115,37 @@ export default function SourcesPanel({ sources, showWarning, highlightKey, onHig
                     </button>
                   )}
                   <CredibilityBadge score={source.credibility_score} tier={source.credibility_tier} />
-                  {source.source_type && (
-                    <span className="text-xs text-slate-500">{source.source_type}</span>
-                  )}
-                  <span className="text-xs text-slate-500">
-                    {source.domain || extractDomain(source.url)}
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                      isDocumentSource(source)
+                        ? "bg-violet-100 text-violet-800"
+                        : "bg-sky-100 text-sky-800"
+                    }`}
+                  >
+                    {sourceTypeBadge(source)}
                   </span>
+                  {!isDocumentSource(source) && (
+                    <span className="text-xs text-slate-500">
+                      {source.domain || extractDomain(source.url)}
+                    </span>
+                  )}
+                  {isDocumentSource(source) && source.page_number != null && (
+                    <span className="text-xs text-slate-500">Page {source.page_number}</span>
+                  )}
                 </div>
 
-                <a
-                  href={source.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium text-brand-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                >
-                  {source.title}
-                </a>
+                {isDocumentSource(source) ? (
+                  <p className="font-medium text-slate-900">{source.title}</p>
+                ) : (
+                  <a
+                    href={source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-brand-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  >
+                    {source.title}
+                  </a>
+                )}
 
                 {source.snippet && (
                   <p className="mt-2 line-clamp-3 text-sm text-slate-600">{source.snippet}</p>

@@ -8,6 +8,8 @@ import LoginPage from "./pages/LoginPage";
 import NewResearchPage from "./pages/NewResearchPage";
 import RegisterPage from "./pages/RegisterPage";
 import ResearchDetailPage from "./pages/ResearchDetailPage";
+import DocumentsPage from "./pages/DocumentsPage";
+import DocumentDetailPage from "./pages/DocumentDetailPage";
 
 export default function App() {
   return (
@@ -21,6 +23,8 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route index element={<HomePage />} />
               <Route path="new" element={<NewResearchPage />} />
+              <Route path="documents" element={<DocumentsPage />} />
+              <Route path="documents/:id" element={<DocumentDetailPage />} />
               <Route path="history" element={<HistoryPage />} />
               <Route path="research/:id" element={<ResearchDetailPage />} />
             </Route>

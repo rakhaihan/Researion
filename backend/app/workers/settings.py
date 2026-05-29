@@ -1,9 +1,10 @@
 from app.core.redis import get_redis_settings
+from app.workers.document_worker import process_document_job
 from app.workers.research_worker import run_research_job, shutdown, startup
 
 
 class WorkerSettings:
-    functions = [run_research_job]
+    functions = [run_research_job, process_document_job]
     redis_settings = get_redis_settings()
     on_startup = startup
     on_shutdown = shutdown

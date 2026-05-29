@@ -72,6 +72,8 @@ Desktop.ini
 *.sqlite
 *.sqlite3
 postgres_data/
+backend/storage/documents/
+storage/documents/
 
 # Reports / exports (generated)
 *.pdf

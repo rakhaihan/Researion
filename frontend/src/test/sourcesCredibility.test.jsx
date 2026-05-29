@@ -27,7 +27,26 @@ const sources = [
   },
 ];
 
+const documentSource = {
+  id: "3",
+  citation_key: "S3",
+  title: "brief.pdf, page 2",
+  url: "document://doc-id/chunk/chunk-id",
+  snippet: "Internal excerpt",
+  credibility_score: 7,
+  credibility_tier: "medium",
+  source_type: "document",
+  page_number: 2,
+};
+
 describe("SourcesPanel credibility", () => {
+  it("shows Web and Document badges", () => {
+    render(<SourcesPanel sources={[sources[0], documentSource]} />);
+    expect(screen.getByText("Web")).toBeInTheDocument();
+    expect(screen.getByText("Document")).toBeInTheDocument();
+    expect(screen.getByText("Page 2")).toBeInTheDocument();
+  });
+
   it("shows tier badges and low credibility warning", () => {
     render(<SourcesPanel sources={sources} showWarning />);
     expect(screen.getByText("S1")).toBeInTheDocument();

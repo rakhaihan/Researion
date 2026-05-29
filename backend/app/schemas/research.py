@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.schemas.documents import ResearchSourceMode
 from app.schemas.quality import QualityStatus, ResearchQualityEvaluationResponse
 from app.utils.url_utils import extract_domain
 
@@ -40,6 +41,8 @@ class ResearchCreate(BaseModel):
     topic: str = Field(..., min_length=3, max_length=500)
     research_type: ResearchType
     depth: ResearchDepth = ResearchDepth.STANDARD
+    research_source_mode: ResearchSourceMode = ResearchSourceMode.WEB_ONLY
+    document_ids: list[UUID] = Field(default_factory=list)
 
 
 class ResearchQuestionResponse(BaseModel):
@@ -63,6 +66,9 @@ class SourceResultResponse(BaseModel):
     credibility_reason: str | None
     source_type: str | None
     published_date: str | None
+    document_id: UUID | None = None
+    chunk_id: UUID | None = None
+    page_number: int | None = None
     accessed_at: datetime | None = None
 
     @computed_field
@@ -112,6 +118,8 @@ class ResearchSummaryResponse(BaseModel):
     research_type: ResearchType
     depth: ResearchDepth
     status: ResearchStatus
+    research_source_mode: ResearchSourceMode = ResearchSourceMode.WEB_ONLY
+    document_ids: list[UUID] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

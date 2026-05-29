@@ -66,7 +66,44 @@ export const api = {
   getQuality: (id) => request(`/research/${id}/quality`),
   regenerateReport: (id) =>
     request(`/research/${id}/regenerate-report`, { method: "POST" }),
+  listDocuments: () => request("/documents"),
+  getDocument: (id) => request(`/documents/${id}`),
+  getDocumentStatus: (id) => request(`/documents/${id}/status`),
+  deleteDocument: (id) => request(`/documents/${id}`, { method: "DELETE" }),
 };
+
+export async function uploadDocument(file) {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("file", file);
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}/documents/upload`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (response.status === 401) {
+    clearAuth();
+    window.location.href = "/login";
+    throw new Error("Session expired");
+  }
+  if (!response.ok) {
+    let detail = `Upload failed: ${response.status}`;
+    try {
+      const data = await response.json();
+      detail = data.detail || detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return response.json();
+}
+
+api.uploadDocument = uploadDocument;
 
 export async function subscribeProgressStream(researchId, onEvent, signal) {
   const token = getToken();

@@ -25,15 +25,22 @@ class SourceEvaluatorAgent(BaseAgent):
                 f"Source type hint: {source.get('source_type', 'web')}\n"
             )
 
+            is_document = source.get("source_type") == "document"
+            fallback_score = 7.0 if is_document else 6.5
+            fallback_reason = (
+                f"User-uploaded document '{source.get('original_filename', source.get('title'))}' "
+                f"retrieved via RAG (relevance {source.get('rag_score', 'n/a')}). "
+                "Verify claims against original file."
+                if is_document
+                else f"Moderate credibility for {domain or 'unknown domain'} (fallback evaluation)."
+            )
             fallback = SourceEvaluationItem(
                 citation_key=source.get("citation_key"),
                 url=source.get("url", ""),
-                credibility_score=6.5,
+                credibility_score=fallback_score,
                 source_type=source.get("source_type", "web"),
-                credibility_reason=(
-                    f"Moderate credibility for {domain or 'unknown domain'} (fallback evaluation)."
-                ),
-                is_primary_source=False,
+                credibility_reason=fallback_reason,
+                is_primary_source=is_document,
                 evaluation_notes="Fallback evaluation due to missing LLM response.",
             )
 

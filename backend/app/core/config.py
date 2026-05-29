@@ -107,6 +107,19 @@ class Settings(BaseSettings):
 
     gunicorn_workers: int = Field(default=2, description="Uvicorn workers under Gunicorn")
 
+    document_storage_dir: str = Field(default="storage/documents")
+    max_document_size_mb: int = Field(default=10)
+    document_chunk_size: int = Field(default=1000)
+    document_chunk_overlap: int = Field(default=150)
+    embedding_provider: Literal["mock", "openai"] = "mock"
+    openai_embedding_model: str = "text-embedding-3-small"
+    vector_store: Literal["memory", "pgvector"] = "memory"
+    rag_top_k: int = Field(default=5)
+
+    @property
+    def max_document_size_bytes(self) -> int:
+        return self.max_document_size_mb * 1024 * 1024
+
     @property
     def cors_origins(self) -> list[str]:
         origins = _parse_origins(self.backend_cors_origins)

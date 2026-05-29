@@ -18,11 +18,14 @@ from app.db.models import (
     ResearchProject,
     ResearchQualityEvaluation,
     ResearchQuestion,
+    ResearchSourceMode,
     ResearchStatus,
     ResearchType,
     SourceResult,
     SourceSummary,
 )
+from app.schemas.documents import ResearchSourceMode as ResearchSourceModeSchema
+from app.services.document_service import DocumentService
 from app.schemas.quality import ResearchQualityEvaluationResponse
 from app.schemas.research import (
     FinalReportBriefResponse,
@@ -52,6 +55,7 @@ class ResearchService:
         self.quality_service = QualityEvaluationService()
         self.report_writer = ReportWriterAgent()
         self.critique_agent = CritiqueAgent()
+        self.document_service = DocumentService()
 
     @property
     def workflow(self) -> ResearchWorkflow:
@@ -66,6 +70,13 @@ class ResearchService:
         user_id: UUID,
     ) -> ResearchProject:
         topic = validate_topic(payload.topic)
+        source_mode = ResearchSourceMode(payload.research_source_mode.value)
+        document_ids = list(payload.document_ids)
+
+        if source_mode in {ResearchSourceMode.DOCUMENTS_ONLY, ResearchSourceMode.HYBRID}:
+            await self.document_service.validate_documents_for_research(
+                db, user_id, document_ids
+            )
 
         project = ResearchProject(
             user_id=user_id,
@@ -73,6 +84,8 @@ class ResearchService:
             research_type=ResearchType(payload.research_type.value),
             depth=ResearchDepth(payload.depth.value),
             status=ResearchStatus.PENDING,
+            research_source_mode=source_mode,
+            document_ids=[str(doc_id) for doc_id in document_ids] or None,
         )
         db.add(project)
         await db.flush()
@@ -148,6 +161,8 @@ class ResearchService:
             research_type=project.research_type,
             depth=project.depth,
             status=project.status,
+            research_source_mode=ResearchSourceModeSchema(project.research_source_mode.value),
+            document_ids=[UUID(doc_id) for doc_id in (project.document_ids or [])],
             created_at=project.created_at,
             updated_at=project.updated_at,
             questions=[
@@ -195,6 +210,10 @@ class ResearchService:
             research_type=project.research_type.value,
             depth=project.depth.value,
             on_progress=on_progress,
+            research_source_mode=project.research_source_mode.value,
+            document_ids=project.document_ids or [],
+            user_id=str(project.user_id),
+            db=db,
         )
 
         await self._persist_workflow_results(db, project, state)
@@ -369,6 +388,8 @@ class ResearchService:
             if source_data.get("evaluation_notes"):
                 metadata = {**metadata, "evaluation_notes": source_data.get("evaluation_notes")}
 
+            doc_id_raw = source_data.get("document_id")
+            chunk_id_raw = source_data.get("chunk_id")
             source = SourceResult(
                 research_id=project.id,
                 question_id=question.id if question else None,
@@ -380,6 +401,9 @@ class ResearchService:
                 credibility_reason=source_data.get("credibility_reason"),
                 source_type=source_data.get("source_type"),
                 published_date=source_data.get("published_date"),
+                document_id=UUID(doc_id_raw) if doc_id_raw else None,
+                chunk_id=UUID(chunk_id_raw) if chunk_id_raw else None,
+                page_number=source_data.get("page_number"),
                 raw_metadata=metadata,
                 accessed_at=accessed_at,
             )
